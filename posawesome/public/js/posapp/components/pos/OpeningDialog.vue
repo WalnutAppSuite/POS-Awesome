@@ -28,10 +28,8 @@
                     <v-confirm-edit v-model:return-value="props.item.amount">
                       {{ currencySymbol(props.item.currency) }}
                       {{ formatCurrency(props.item.amount) }}
-                      <template v-slot:input>
-                        <v-text-field v-model="props.item.amount" :rules="[max25chars]" :label="frappe._('Edit')"
-                          single-line counter type="number"></v-text-field>
-                      </template>
+                      <v-text-field v-model="props.item.amount" :rules="[max25chars]" :label="frappe._('Edit')"
+                        single-line counter type="number"></v-text-field>
                     </v-confirm-edit>
                   </template>
                 </v-data-table>
