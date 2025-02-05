@@ -18,7 +18,6 @@ app_license = "GPLv3"
 # app_include_css = "/assets/posawesome/css/posawesome.css"
 # app_include_js = "/assets/posawesome/js/posawesome.js"
 app_include_js = [
-    "/assets/posawesome/node_modules/vuetify/dist/vuetify.js",
     "posawesome.bundle.js",
 ]
 
@@ -68,6 +67,8 @@ doctype_js = {
 
 # before_install = "posawesome.install.before_install"
 # after_install = "posawesome.install.after_install"
+# before_uninstall = "posawesome.uninstall.before_uninstall"
+after_uninstall = "posawesome.uninstall.after_uninstall"
 
 # Desk Notifications
 # ------------------
@@ -143,6 +144,10 @@ doc_events = {
 # 	"Task": "posawesome.task.get_dashboard_data"
 # }
 
+# override_doctype_class = {
+# "doctype": "method",
+# }
+
 # exempt linked doctypes from being automatically cancelled
 #
 # auto_cancel_exempted_doctypes = ["Auto Repeat"]
@@ -199,6 +204,7 @@ fixtures = [
                     "Sales Order-posa_notes",
                     "Sales Order Item-posa_notes",
                     "POS Profile-posa_allow_sales_order",
+                    "POS Profile-custom_allow_select_sales_order",
                     "POS Profile-posa_column_break_112",
                     "POS Profile-posa_show_template_items",
                     "POS Profile-posa_hide_variants_items",

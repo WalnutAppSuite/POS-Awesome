@@ -2,54 +2,23 @@
   <div fluid class="mt-2">
     <ClosingDialog></ClosingDialog>
     <Drafts></Drafts>
+    <SalesOrders></SalesOrders>
     <Returns></Returns>
     <NewAddress></NewAddress>
     <MpesaPayments></MpesaPayments>
     <Variants></Variants>
     <OpeningDialog v-if="dialog" :dialog="dialog"></OpeningDialog>
     <v-row v-show="!dialog">
-      <v-col
-        v-show="!payment && !offers && !coupons"
-        xl="5"
-        lg="5"
-        md="5"
-        sm="5"
-        cols="12"
-        class="pos pr-0"
-      >
+      <v-col v-show="!payment && !offers && !coupons" xl="5" lg="5" md="5" sm="5" cols="12" class="pos pr-0">
         <ItemsSelector></ItemsSelector>
       </v-col>
-      <v-col
-        v-show="offers"
-        xl="5"
-        lg="5"
-        md="5"
-        sm="5"
-        cols="12"
-        class="pos pr-0"
-      >
+      <v-col v-show="offers" xl="5" lg="5" md="5" sm="5" cols="12" class="pos pr-0">
         <PosOffers></PosOffers>
       </v-col>
-      <v-col
-        v-show="coupons"
-        xl="5"
-        lg="5"
-        md="5"
-        sm="5"
-        cols="12"
-        class="pos pr-0"
-      >
+      <v-col v-show="coupons" xl="5" lg="5" md="5" sm="5" cols="12" class="pos pr-0">
         <PosCoupons></PosCoupons>
       </v-col>
-      <v-col
-        v-show="payment"
-        xl="5"
-        lg="5"
-        md="5"
-        sm="5"
-        cols="12"
-        class="pos pr-0"
-      >
+      <v-col v-show="payment" xl="5" lg="5" md="5" sm="5" cols="12" class="pos pr-0">
         <Payments></Payments>
       </v-col>
 
@@ -61,7 +30,7 @@
 </template>
 
 <script>
-import { evntBus } from '../../bus';
+
 import ItemsSelector from './ItemsSelector.vue';
 import Invoice from './Invoice.vue';
 import OpeningDialog from './OpeningDialog.vue';
@@ -69,6 +38,7 @@ import Payments from './Payments.vue';
 import PosOffers from './PosOffers.vue';
 import PosCoupons from './PosCoupons.vue';
 import Drafts from './Drafts.vue';
+import SalesOrders from "./SalesOrders.vue";
 import ClosingDialog from './ClosingDialog.vue';
 import NewAddress from './NewAddress.vue';
 import Variants from './Variants.vue';
@@ -101,6 +71,7 @@ export default {
     NewAddress,
     Variants,
     MpesaPayments,
+    SalesOrders,
   },
 
   methods: {
@@ -114,8 +85,8 @@ export default {
             this.pos_profile = r.message.pos_profile;
             this.pos_opening_shift = r.message.pos_opening_shift;
             this.get_offers(this.pos_profile.name);
-            evntBus.$emit('register_pos_profile', r.message);
-            evntBus.$emit('set_company', r.message.company);
+            this.eventBus.emit('register_pos_profile', r.message);
+            this.eventBus.emit('set_company', r.message.company);
             console.info('LoadPosProfile');
           } else {
             this.create_opening_voucher();
@@ -135,7 +106,7 @@ export default {
         )
         .then((r) => {
           if (r.message) {
-            evntBus.$emit('open_ClosingDialog', r.message);
+            this.eventBus.emit('open_ClosingDialog', r.message);
           } else {
             // console.log(r);
           }
@@ -151,8 +122,8 @@ export default {
         )
         .then((r) => {
           if (r.message) {
-            evntBus.$emit('show_mesage', {
-              text: `POS Shift Closed`,
+            this.eventBus.emit('show_message', {
+              title: `POS Shift Closed`,
               color: 'success',
             });
             this.check_opening_entry();
@@ -169,13 +140,13 @@ export default {
         .then((r) => {
           if (r.message) {
             console.info('LoadOffers');
-            evntBus.$emit('set_offers', r.message);
+            this.eventBus.emit('set_offers', r.message);
           }
         });
     },
     get_pos_setting() {
       frappe.db.get_doc('POS Settings', undefined).then((doc) => {
-        evntBus.$emit('set_pos_settings', doc);
+        this.eventBus.emit('set_pos_settings', doc);
       });
     },
   },
@@ -184,40 +155,40 @@ export default {
     this.$nextTick(function () {
       this.check_opening_entry();
       this.get_pos_setting();
-      evntBus.$on('close_opening_dialog', () => {
+      this.eventBus.on('close_opening_dialog', () => {
         this.dialog = false;
       });
-      evntBus.$on('register_pos_data', (data) => {
+      this.eventBus.on('register_pos_data', (data) => {
         this.pos_profile = data.pos_profile;
         this.get_offers(this.pos_profile.name);
         this.pos_opening_shift = data.pos_opening_shift;
-        evntBus.$emit('register_pos_profile', data);
+        this.eventBus.emit('register_pos_profile', data);
         console.info('LoadPosProfile');
       });
-      evntBus.$on('show_payment', (data) => {
+      this.eventBus.on('show_payment', (data) => {
         this.payment = true ? data === 'true' : false;
         this.offers = false ? data === 'true' : false;
         this.coupons = false ? data === 'true' : false;
       });
-      evntBus.$on('show_offers', (data) => {
+      this.eventBus.on('show_offers', (data) => {
         this.offers = true ? data === 'true' : false;
         this.payment = false ? data === 'true' : false;
         this.coupons = false ? data === 'true' : false;
       });
-      evntBus.$on('show_coupons', (data) => {
+      this.eventBus.on('show_coupons', (data) => {
         this.coupons = true ? data === 'true' : false;
         this.offers = false ? data === 'true' : false;
         this.payment = false ? data === 'true' : false;
       });
-      evntBus.$on('open_closing_dialog', () => {
+      this.eventBus.on('open_closing_dialog', () => {
         this.get_closing_data();
       });
-      evntBus.$on('submit_closing_pos', (data) => {
+      this.eventBus.on('submit_closing_pos', (data) => {
         this.submit_closing_pos(data);
       });
     });
   },
-  beforeDestroy() {
+  beforeUnmount() {
     evntBus.$off('close_opening_dialog');
     evntBus.$off('register_pos_data');
     evntBus.$off('LoadPosProfile');
