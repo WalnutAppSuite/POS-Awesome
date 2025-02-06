@@ -456,7 +456,6 @@ export default {
         { title: __("UOM"), key: "uom", align: "center" },
         { title: __("Rate"), key: "rate", align: "center" },
         { title: __("Amount"), key: "amount", align: "center" },
-        { title: __("Offer?"), key: "posa_is_offer", align: "center" },
       ],
     };
   },
@@ -828,7 +827,13 @@ export default {
       if (this.invoice_doc.name) {
         doc = { ...this.invoice_doc };
       }
-      console.log("the pos profile", doc.pos_profile)
+      if(this.pos_profile.name=="Uniform Fursungi"){
+        doc.school = "Walnut School at Fursungi"
+      } else if(this.pos_profile.name == "Uniform Shivane"){
+        doc.school = "Walnut School at Shivane"
+      } else if(this.pos_profile.name=="Uniform Wakad"){
+        doc.school = "Walnut School at Wakad"
+      }
       doc.doctype = "Sales Invoice";
       doc.is_pos = 1;
       doc.ignore_pricing_rule = 1;

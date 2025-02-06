@@ -117,7 +117,6 @@ export default {
         }
       });
 
-      // Step 3: Fetch the student name from 'Student' Doctype and auto-fill
       frappe.call({
         method: 'frappe.client.get_list',
         args: {
