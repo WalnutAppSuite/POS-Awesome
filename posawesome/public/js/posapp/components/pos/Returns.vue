@@ -9,7 +9,7 @@
         </v-card-title>
         <v-container>
           <v-row class="mb-4">
-            <v-text-field color="primary" :label="frappe._('Invoice ID')" bg-color="white" hide-details
+            <v-text-field color="primary" :label="frappe._('Reference Number')" bg-color="white" hide-details
               v-model="invoice_name" density="compact" clearable class="mx-4"></v-text-field>
             <v-btn variant="text" class="ml-2" color="primary" theme="dark" @click="search_invoices">{{ __('Search')
               }}</v-btn>
