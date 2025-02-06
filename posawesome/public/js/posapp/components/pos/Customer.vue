@@ -92,15 +92,14 @@ export default {
         },
         callback: function (response) {
           if (response.message.length === 0) {
-            // Step 2: If customer doesn't exist, insert a new record
             frappe.call({
               method: 'frappe.client.insert',
               args: {
                 doc: {
                   doctype: 'Customer',
                   customer_name: vm.customer,
-                  customer_type: 'Individual', // Adjust as needed
-                  customer_group: 'Student', // Adjust as needed
+                  customer_type: 'Individual',
+                  customer_group: 'Student',
                 }
               },
               callback: function (insertResponse) {
