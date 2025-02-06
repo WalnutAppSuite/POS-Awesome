@@ -810,6 +810,11 @@ def submit_in_background_job(kwargs):
 
 
 @frappe.whitelist()
+def set_customer(customer_name):
+    print("this method is callled")
+
+
+@frappe.whitelist()
 def get_available_credit(customer, company):
     total_credit = []
 
@@ -1212,7 +1217,7 @@ def search_invoices_for_return(invoice_name, company):
     invoices_list = frappe.get_list(
         "Sales Invoice",
         filters={
-            "name": ["like", f"%{invoice_name}%"],
+            "customer": ["like", f"%{invoice_name}%"],
             "company": company,
             "docstatus": 1,
             "is_return": 0,

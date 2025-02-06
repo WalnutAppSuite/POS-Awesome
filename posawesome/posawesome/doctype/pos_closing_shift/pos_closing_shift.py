@@ -262,7 +262,6 @@ def make_closing_shift_from_opening(opening_shift):
     closing_shift.set("payment_reconciliation", payments)
     closing_shift.set("taxes", taxes)
     closing_shift.set("pos_payments", pos_payments_table)
-
     return closing_shift
 
 

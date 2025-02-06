@@ -205,6 +205,7 @@ export default {
     this.$nextTick(function () {
       this.eventBus.on('show_message', (data) => {
         console.log("GOT Something: <s>")
+        console.log("the deubg", data)
         this.show_message(data);
       });
       this.eventBus.on('set_company', (data) => {

@@ -103,7 +103,7 @@ export default {
     items_view: "list",
     item_group: "ALL",
     loading: false,
-    items_group: ["ALL"],
+    items_group: [],
     items: [],
     search: "",
     first_search: "",

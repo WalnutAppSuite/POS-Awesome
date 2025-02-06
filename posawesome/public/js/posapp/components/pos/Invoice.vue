@@ -388,7 +388,7 @@
                 }}</v-btn>
             </v-col>
             <v-col v-if="pos_profile.posa_allow_return == 1" cols="6" class="pa-1">
-              <v-btn block class="pa-0" :class="{ 'disable-events': !pos_profile.posa_allow_return }" color="secondary"
+              <v-btn block class="pa-0" color="secondary"
                 theme="dark" @click="open_returns">{{ __("Sales Return") }}</v-btn>
             </v-col>
 
@@ -456,7 +456,6 @@ export default {
         { title: __("UOM"), key: "uom", align: "center" },
         { title: __("Rate"), key: "rate", align: "center" },
         { title: __("Amount"), key: "amount", align: "center" },
-        { title: __("Offer?"), key: "posa_is_offer", align: "center" },
       ],
     };
   },
@@ -827,6 +826,13 @@ export default {
       let doc = {};
       if (this.invoice_doc.name) {
         doc = { ...this.invoice_doc };
+      }
+      if(this.pos_profile.name=="Uniform Fursungi"){
+        doc.school = "Walnut School at Fursungi"
+      } else if(this.pos_profile.name == "Uniform Shivane"){
+        doc.school = "Walnut School at Shivane"
+      } else if(this.pos_profile.name=="Uniform Wakad"){
+        doc.school = "Walnut School at Wakad"
       }
       doc.doctype = "Sales Invoice";
       doc.is_pos = 1;
@@ -1428,27 +1434,27 @@ export default {
       });
     },
 
-    fetch_customer_details() {
-      var vm = this;
-      if (this.customer) {
-        frappe.call({
-          method: "posawesome.posawesome.api.posapp.get_customer_info",
-          args: {
-            customer: vm.customer,
-          },
-          async: false,
-          callback: (r) => {
-            const message = r.message;
-            if (!r.exc) {
-              vm.customer_info = {
-                ...message,
-              };
-            }
-            vm.update_price_list();
-          },
-        });
-      }
-    },
+    // fetch_customer_details() {
+    //   var vm = this;
+    //   if (this.customer) {
+    //     frappe.call({
+    //       method: "posawesome.posawesome.api.posapp.get_customer_info",
+    //       args: {
+    //         customer: vm.customer,
+    //       },
+    //       async: false,
+    //       callback: (r) => {
+    //         const message = r.message;
+    //         if (!r.exc) {
+    //           vm.customer_info = {
+    //             ...message,
+    //           };
+    //         }
+    //         vm.update_price_list();
+    //       },
+    //     });
+    //   }
+    // },
 
     get_price_list() {
       let price_list = this.pos_profile.selling_price_list;
@@ -2512,9 +2518,9 @@ export default {
     this.eventBus.on("update_customer", (customer) => {
       this.customer = customer;
     });
-    this.eventBus.on("fetch_customer_details", () => {
-      this.fetch_customer_details();
-    });
+    // this.eventBus.on("fetch_customer_details", () => {
+    //   this.fetch_customer_details();
+    // });
     this.eventBus.on("clear_invoice", () => {
       this.clear_invoice();
     });
@@ -2556,7 +2562,7 @@ export default {
     evntBus.$off("register_pos_profile");
     evntBus.$off("add_item");
     evntBus.$off("update_customer");
-    evntBus.$off("fetch_customer_details");
+    // evntBus.$off("fetch_customer_details");
     evntBus.$off("clear_invoice");
     evntBus.$off("set_offers");
     evntBus.$off("update_invoice_offers");
@@ -2579,7 +2585,7 @@ export default {
     customer() {
       this.close_payments();
       this.eventBus.emit("set_customer", this.customer);
-      this.fetch_customer_details();
+      // this.fetch_customer_details();
       this.set_delivery_charges();
     },
     customer_info() {
