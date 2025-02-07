@@ -126,12 +126,12 @@ export default {
         },
         callback: function (r) {
           if (r.message && r.message.length > 0) {
-            let student = r.message[0]; // Assuming first match
-            vm.customer_code = student.student_name; // Auto-fill Student Name
-            vm.student_readonly = true; // Make Student Name read-only
+            let student = r.message[0]; 
+            vm.customer_code = student.student_name; 
+            vm.student_readonly = true;
           } else {
             frappe.msgprint(__('No student found for this customer.'));
-            vm.student_readonly = false; // Keep editable if no match
+            vm.student_readonly = false;
           }
         },
         error: function (err) {

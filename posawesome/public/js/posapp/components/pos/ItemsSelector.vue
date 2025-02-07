@@ -66,8 +66,23 @@
     <v-card class="cards mb-0 mt-3 pa-2 bg-grey-lighten-5">
       <v-row no-gutters align="center" justify="center">
         <v-col cols="12">
-          <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="outlined"
-            hide-details v-model="item_group" v-on:update:model-value="search_onchange"></v-select>
+          <v-row>
+            <v-col cols="6">
+              <v-select :items="items_group" :label="frappe._('Items Group')" density="compact" variant="outlined"
+                hide-details v-model="item_group" v-on:update:model-value="search_onchange"></v-select>
+            </v-col>
+            <v-col cols="6">
+              <v-select
+                :items="select_items"
+                :label="frappe._('Select Items')"
+                density="compact"
+                variant="outlined"
+                hide-details
+                v-model="selected_item"
+              ></v-select>
+            </v-col>
+          </v-row>
+
         </v-col>
         <v-col cols="3" class="mt-1">
           <v-btn-toggle v-model="items_view" color="primary" group density="compact" rounded>
@@ -93,6 +108,7 @@
 
 <script>
 
+import { filter } from "lodash";
 import format from "../../format";
 import _ from "lodash";
 export default {
@@ -102,6 +118,8 @@ export default {
     flags: {},
     items_view: "list",
     item_group: "ALL",
+    selected_item: null,
+    select_items :["All","Jacket", "Pant", "Shirt", "T-Shirt"],
     loading: false,
     items_group: [],
     items: [],
@@ -451,124 +469,47 @@ export default {
   },
 
   computed: {
-    filtered_items() {
-      this.search = this.get_search(this.first_search);
-      if (!this.pos_profile.pose_use_limit_search) {
-        let filtred_list = [];
-        let filtred_group_list = [];
-        if (this.item_group != "ALL") {
-          filtred_group_list = this.items.filter((item) =>
-            item.item_group
-              .toLowerCase()
-              .includes(this.item_group.toLowerCase())
-          );
-        } else {
-          filtred_group_list = this.items;
-        }
-        if (!this.search || this.search.length < 3) {
-          if (
-            this.pos_profile.posa_show_template_items &&
-            this.pos_profile.posa_hide_variants_items
-          ) {
-            return (filtred_list = filtred_group_list
-              .filter((item) => !item.variant_of)
-              .slice(0, 50));
-          } else {
-            filtred_list = filtred_group_list.slice(0, 50);
-            return filtred_list;
-          }
-        } else if (this.search) {
-          filtred_list = filtred_group_list.filter((item) => {
-            let found = false;
-            for (let element of item.item_barcode) {
-              if (element.barcode == this.search) {
-                found = true;
-                break;
-              }
-            }
-            return found;
-          });
-          if (filtred_list.length == 0) {
-            filtred_list = filtred_group_list.filter((item) =>
-              item.item_code.toLowerCase().includes(this.search.toLowerCase())
-            );
-            if (filtred_list.length == 0) {
-              const search_combinations = this.generateWordCombinations(
-                this.search
-              );
-              filtred_list = filtred_group_list.filter((item) => {
-                let found = false;
-                for (let element of search_combinations) {
-                  element = element.toLowerCase().trim();
-                  let element_regex = new RegExp(
-                    `.*${element.split("").join(".*")}.*`
-                  );
-                  if (element_regex.test(item.item_name.toLowerCase())) {
-                    found = true;
-                    break;
-                  }
-                }
-                return found;
-              });
-            }
-            if (
-              filtred_list.length == 0 &&
-              this.pos_profile.posa_search_serial_no
-            ) {
-              filtred_list = filtred_group_list.filter((item) => {
-                let found = false;
-                for (let element of item.serial_no_data) {
-                  if (element.serial_no == this.search) {
-                    found = true;
-                    this.flags.serial_no = null;
-                    this.flags.serial_no = this.search;
-                    break;
-                  }
-                }
-                return found;
-              });
-            }
-            if (
-              filtred_list.length == 0 &&
-              this.pos_profile.posa_search_batch_no
-            ) {
-              filtred_list = filtred_group_list.filter((item) => {
-                let found = false;
-                for (let element of item.batch_no_data) {
-                  if (element.batch_no == this.search) {
-                    found = true;
-                    this.flags.batch_no = null;
-                    this.flags.batch_no = this.search;
-                    break;
-                  }
-                }
-                return found;
-              });
-            }
-          }
-        }
-        if (
-          this.pos_profile.posa_show_template_items &&
-          this.pos_profile.posa_hide_variants_items
-        ) {
-          return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
-        } else {
-          return filtred_list.slice(0, 50);
-        }
-      } else {
+  filtered_items() {
+    this.search = this.get_search(this.first_search);
 
-        return this.items.slice(0, 50);
+    if (!this.pos_profile.pose_use_limit_search) {
+      let filtred_list = [];
+      let filtred_group_list = [];
+
+      // Filter by Item Group
+      if (this.item_group != "ALL") {
+        filtred_group_list = this.items.filter((item) =>
+          item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
+        );
+      } else {
+        filtred_group_list = this.items;
       }
-    },
-    debounce_search: {
-      get() {
-        return this.first_search;
-      },
-      set: _.debounce(function (newValue) {
-        this.first_search = newValue;
-      }, 200),
-    },
+
+      // Apply search filter
+      if (!this.search || this.search.length < 3) {
+        filtred_list = filtred_group_list;
+      } else {
+        filtred_list = filtred_group_list.filter((item) =>
+          item.item_name.toLowerCase().includes(this.search.toLowerCase())
+        );
+      }
+
+      // **Fix: Show exact match for selected item in dropdown**
+      if (this.selected_item && this.selected_item !== "All") {
+        const selectedWords = this.selected_item.toLowerCase().split(" ");
+        filtred_list = filtred_list.filter((item) => {
+          const itemWords = item.item_name.toLowerCase().split(" ");
+          return selectedWords.every((word) => itemWords.includes(word));
+        });
+      }
+
+      return filtred_list.slice(0, 50);
+    } else {
+      return this.items.slice(0, 50);
+    }
+  }
   },
+
 
   created: function () {
     this.$nextTick(function () { });
