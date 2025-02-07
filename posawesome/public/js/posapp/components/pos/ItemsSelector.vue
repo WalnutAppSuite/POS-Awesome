@@ -470,43 +470,46 @@ export default {
 
   computed: {
   filtered_items() {
-      this.search = this.get_search(this.first_search);
+    this.search = this.get_search(this.first_search);
 
-      if (!this.pos_profile.pose_use_limit_search) {
-        let filtred_list = [];
-        let filtred_group_list = [];
+    if (!this.pos_profile.pose_use_limit_search) {
+      let filtred_list = [];
+      let filtred_group_list = [];
 
-        // Filter by Item Group
-        if (this.item_group != "ALL") {
-          filtred_group_list = this.items.filter((item) =>
-            item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
-          );
-        } else {
-          filtred_group_list = this.items;
-        }
-
-        // Apply search filter
-        if (!this.search || this.search.length < 3) {
-          filtred_list = filtred_group_list;
-        } else {
-          filtred_list = filtred_group_list.filter((item) =>
-            item.item_name.toLowerCase().includes(this.search.toLowerCase())
-          );
-        }
-
-        // **Fix: Show all items when "All" is selected in dropdown**
-        if (this.selected_item && this.selected_item !== "All") {
-          filtred_list = filtred_list.filter((item) =>
-            item.item_name.toLowerCase().includes(this.selected_item.toLowerCase())
-          );
-        }
-
-        return filtred_list.slice(0, 50);
+      // Filter by Item Group
+      if (this.item_group != "ALL") {
+        filtred_group_list = this.items.filter((item) =>
+          item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
+        );
       } else {
-        return this.items.slice(0, 50);
+        filtred_group_list = this.items;
       }
+
+      // Apply search filter
+      if (!this.search || this.search.length < 3) {
+        filtred_list = filtred_group_list;
+      } else {
+        filtred_list = filtred_group_list.filter((item) =>
+          item.item_name.toLowerCase().includes(this.search.toLowerCase())
+        );
+      }
+
+      // **Fix: Show exact match for selected item in dropdown**
+      if (this.selected_item && this.selected_item !== "All") {
+        const selectedWords = this.selected_item.toLowerCase().split(" ");
+        filtred_list = filtred_list.filter((item) => {
+          const itemWords = item.item_name.toLowerCase().split(" ");
+          return selectedWords.every((word) => itemWords.includes(word));
+        });
+      }
+
+      return filtred_list.slice(0, 50);
+    } else {
+      return this.items.slice(0, 50);
     }
+  }
   },
+
 
   created: function () {
     this.$nextTick(function () { });

@@ -92,14 +92,15 @@ export default {
         },
         callback: function (response) {
           if (response.message.length === 0) {
+            // Step 2: If customer doesn't exist, insert a new record
             frappe.call({
               method: 'frappe.client.insert',
               args: {
                 doc: {
                   doctype: 'Customer',
                   customer_name: vm.customer,
-                  customer_type: 'Individual',
-                  customer_group: 'Student',
+                  customer_type: 'Individual', // Adjust as needed
+                  customer_group: 'Student', // Adjust as needed
                 }
               },
               callback: function (insertResponse) {
@@ -125,12 +126,12 @@ export default {
         },
         callback: function (r) {
           if (r.message && r.message.length > 0) {
-            let student = r.message[0]; // Assuming first match
-            vm.customer_code = student.student_name; // Auto-fill Student Name
-            vm.student_readonly = true; // Make Student Name read-only
+            let student = r.message[0]; 
+            vm.customer_code = student.student_name; 
+            vm.student_readonly = true;
           } else {
             frappe.msgprint(__('No student found for this customer.'));
-            vm.student_readonly = false; // Keep editable if no match
+            vm.student_readonly = false;
           }
         },
         error: function (err) {
