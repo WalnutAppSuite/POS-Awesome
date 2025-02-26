@@ -1,6 +1,5 @@
 <template>
   <div>
-    <!-- Customer Name Input -->
     <v-text-field 
       density="compact"
       clearable
@@ -11,11 +10,13 @@
       bg-color="white"
       :disabled="readonly"
       append-inner-icon="mdi-arrow-right"
-      @click:append-inner="new_customer" 
+      @click:append-inner="new_customer"
+      @keyup.enter="new_customer"
       @click:prepend-inner="go_back"
+      @input="customer = customer.toUpperCase()"
     ></v-text-field>
 
-    <!-- Student Name Input (Auto-filled and Read-Only after selection) -->
+    
     <v-text-field 
       density="compact"
       clearable
@@ -41,9 +42,9 @@ export default {
     pos_profile: '',
     customers: [],
     customer: '',
-    customer_code: '', // Student Name field
+    customer_code: '',
     readonly: false,
-    student_readonly: false, // Make Student Name readonly after autofill
+    student_readonly: false,
     customer_info: {},
   }),
 
@@ -55,7 +56,7 @@ export default {
     get_customer_names() {
       var vm = this;
       if (this.customers.length > 0) return;
-
+      console.log('Fetching customers for POS Profile:', this.pos_profile.pos_profile.name);
       if (vm.pos_profile.posa_local_storage && localStorage.customer_storage) {
         vm.customers = JSON.parse(localStorage.getItem('customer_storage'));
       }
@@ -73,7 +74,7 @@ export default {
         },
       });
     },
-
+    
     async new_customer() {
       if (!this.customer) {
         frappe.msgprint(__('Please enter a customer name first.'));
@@ -81,43 +82,42 @@ export default {
       }
 
       let vm = this;
-
-      // Step 1: Check if customer exists in 'Customer' doctype
-      frappe.call({
-        method: 'frappe.client.get_list',
-        args: {
-          doctype: 'Customer',
-          filters: { 'customer_name': this.customer },
-          fields: ['name']
-        },
-        callback: function (response) {
-          if (response.message.length === 0) {
-            // Step 2: If customer doesn't exist, insert a new record
-            frappe.call({
-              method: 'frappe.client.insert',
-              args: {
-                doc: {
-                  doctype: 'Customer',
-                  customer_name: vm.customer,
-                  customer_type: 'Individual', // Adjust as needed
-                  customer_group: 'Student', // Adjust as needed
+      console.log('Fetching customers for POS Profile:', this.pos_profile.pos_profile.name);
+      console.log('Fetching customers for POS Profile:', this.customer);
+      if(
+        (this.pos_profile.pos_profile.name === "Uniform Fursungi" && this.customer.startsWith("FU")) ||
+        (this.pos_profile.pos_profile.name === "Uniform Shivane" && this.customer.startsWith("SH")) ||
+        (this.pos_profile.pos_profile.name === "Uniform Wakad" && this.customer.startsWith("WA"))
+      ){
+        frappe.call({
+          method: 'frappe.client.get_list',
+          args: {
+            doctype: 'Customer',
+            filters: { 'customer_name': this.customer },
+            fields: ['name']
+          },
+          callback: function (response) {
+            if (response.message.length === 0) {
+              frappe.call({
+                method: 'frappe.client.insert',
+                args: {
+                  doc: {
+                    doctype: 'Customer',
+                    customer_name: vm.customer,
+                    customer_type: 'Individual', 
+                    customer_group: 'Student', 
+                  }
+                },
+                error: function (err) {
+                  console.error('Error inserting customer:', err);
+                  frappe.msgprint(__('Failed to create customer.'));
                 }
-              },
-              callback: function (insertResponse) {
-                if (insertResponse.message) {
-                  frappe.msgprint(__('Customer created successfully: ' + vm.customer));
-                }
-              },
-              error: function (err) {
-                console.error('Error inserting customer:', err);
-                frappe.msgprint(__('Failed to create customer.'));
-              }
-            });
+              });
+            }
           }
-        }
-      });
+        });
 
-      frappe.call({
+        frappe.call({
         method: 'frappe.client.get_list',
         args: {
           doctype: 'Student',
@@ -138,6 +138,14 @@ export default {
           console.error('Error fetching student details:', err);
         }
       });
+      }else{
+        this.customer = ""
+        frappe.msgprint({
+          title: __('Validation Error'),
+          message: __('Student doesn\'t belong to this branch'),
+          indicator: 'red'
+        });
+      }
     },
 
     edit_customer() {

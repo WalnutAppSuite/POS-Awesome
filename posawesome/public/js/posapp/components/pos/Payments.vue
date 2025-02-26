@@ -296,7 +296,7 @@
     <v-card flat class="cards mb-0 mt-3 py-0">
       <v-row align="start" no-gutters>
         <v-col cols="6">
-          <v-btn block size="large" color="primary" theme="dark" @click="submit" :disabled="vaildatPayment">{{
+          <v-btn block size="large" color="primary" theme="dark" @click="submit(undefined, false, true)" :disabled="vaildatPayment">{{
             __("Submit")
           }}</v-btn>
         </v-col>
@@ -582,22 +582,15 @@ export default {
         this.pos_profile.print_format_for_online ||
         this.pos_profile.print_format;
       const letter_head = this.pos_profile.letter_head || 0;
-      const url =
-        frappe.urllib.get_base_url() +
-        "/printview?doctype=Sales%20Invoice&name=" +
-        this.invoice_doc.name +
-        "&trigger_print=1" +
-        "&format=" +
-        print_format +
-        "&no_letterhead=" +
-        letter_head;
+      const url = frappe.urllib.get_base_url() + "/printview?doctype=Sales%20Invoice&name=" + this.invoice_doc.name + "&trigger_print=1" + "&format=" + print_format + "&no_letterhead=" + letter_head;
       const printWindow = window.open(url, "Print");
       printWindow.addEventListener(
         "load",
         function () {
           printWindow.print();
-          // printWindow.close();
-          // NOTE : uncomoent this to auto closing printing window
+          setTimeout(() => {
+            printWindow.print();
+          }, 1000);
         },
         true
       );
