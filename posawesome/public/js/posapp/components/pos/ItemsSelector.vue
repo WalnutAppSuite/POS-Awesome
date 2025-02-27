@@ -448,8 +448,7 @@ export default {
       const words = inputString.split(" ");
       const wordCount = words.length;
       const combinations = [];
-
-      // Helper function to generate all permutations
+      
       function permute(arr, m = []) {
         if (arr.length === 0) {
           combinations.push(m.join(" "));
