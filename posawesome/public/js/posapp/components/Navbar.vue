@@ -215,7 +215,6 @@ export default {
     this.$nextTick(() => {
       this.eventBus.on('register_pos_profile', (data) => {
         this.pos_profile = data.pos_profile || { name: '' };
-        console.log("POS Profile Registered:", this.pos_profile);
       });
     });
   }
