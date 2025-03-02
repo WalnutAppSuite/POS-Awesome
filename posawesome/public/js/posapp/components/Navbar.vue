@@ -11,62 +11,38 @@
 
       <v-spacer></v-spacer>
       <v-btn style="cursor: unset" variant="text" color="primary">
-        <span right>{{ pos_profile.name }}</span>
+        <span>{{ pos_profile.name || "No Profile" }}</span>
       </v-btn>
-      <div class="text-center">
-        <v-menu target="[y]">
-          <template v-slot:activator="{ props }">
-            <v-btn color="primary" theme="dark" variant="text" v-bind="props">Menu</v-btn>
-          </template>
-          <v-card class="mx-auto" max-width="300" tile>
-            <v-list density="compact" v-model="menu_item" color="primary">
+      <v-btn style="cursor: pointer" variant="text" color="primary" @click="openSalesHistory">
+        <span>Sales History</span>
+      </v-btn>
 
-              <v-list-item @click="close_shift_dialog" v-if="!pos_profile.posa_hide_closing_shift && item == 0">
-                <template v-slot:prepend>
-                  <v-icon icon="mdi-content-save-move-outline"></v-icon>
-                </template>
+      <v-menu>
+        <template v-slot:activator="{ props }">
+          <v-btn color="primary" theme="dark" variant="text" v-bind="props">Menu</v-btn>
+        </template>
+        <v-card class="mx-auto" max-width="300">
+          <v-list density="compact" v-model="menu_item" color="primary">
+            <v-list-item @click="close_shift_dialog" v-if="showCloseShift">
+              <v-icon icon="mdi-content-save-move-outline"></v-icon>
+              <v-list-item-title>Close Shift</v-list-item-title>
+            </v-list-item>
+            <v-divider class="my-0"></v-divider>
 
-                <v-list-item-title>{{
-                  __('Close Shift')
-                }}</v-list-item-title>
+            <v-list-item @click="logOut">
+              <v-icon icon="mdi-logout"></v-icon>
+              <v-list-item-title>Logout</v-list-item-title>
+            </v-list-item>
 
-              </v-list-item>
-              <v-list-item @click="print_last_invoice" v-if="
-                pos_profile.posa_allow_print_last_invoice &&
-                this.last_invoice
-              ">
-                <template v-slot:prepend>
-                  <v-icon icon="mdi-printer"></v-icon>
-                </template>
-
-                <v-list-item-title>{{
-                  __('Print Last Invoice')
-                }}</v-list-item-title>
-
-              </v-list-item>
-              <v-divider class="my-0"></v-divider>
-              <v-list-item @click="logOut">
-                <template v-slot:prepend>
-                  <v-icon icon="mdi-logout"></v-icon>
-                </template>
-
-                <v-list-item-title>{{ __('Logout') }}</v-list-item-title>
-
-              </v-list-item>
-              <v-list-item @click="go_about">
-                <template v-slot:prepend>
-                  <v-icon icon="mdi-information-outline"></v-icon>
-                </template>
-
-                <v-list-item-title>{{ __('About') }}</v-list-item-title>
-
-              </v-list-item>
-
-            </v-list>
-          </v-card>
-        </v-menu>
-      </div>
+            <v-list-item @click="go_about">
+              <v-icon icon="mdi-information-outline"></v-icon>
+              <v-list-item-title>About</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-card>
+      </v-menu>
     </v-app-bar>
+
     <v-navigation-drawer v-model="drawer" v-model:mini-variant="mini" class="bg-primary margen-top" width="170">
       <v-list theme="dark">
         <v-list-item class="px-2">
@@ -75,84 +51,119 @@
               <v-img :src="company_img"></v-img>
             </v-avatar>
           </template>
-
           <v-list-item-title>{{ company }}</v-list-item-title>
-
           <v-btn icon @click.stop="mini = !mini">
             <v-icon icon="mdi-chevron-left"></v-icon>
           </v-btn>
         </v-list-item>
-        <!-- <MyPopup/> -->
+
         <v-list v-model="item" color="white">
           <v-list-item v-for="item in items" :key="item.text" @click="changePage(item.text)">
-            <template v-slot:prepend>
-              <v-icon :icon="item.icon"></v-icon>
-            </template>
-
-            <v-list-item-title>
-              <div v-text="item.text"></div>
-            </v-list-item-title>
-
+            <v-icon :icon="item.icon"></v-icon>
+            <v-list-item-title>{{ item.text }}</v-list-item-title>
           </v-list-item>
         </v-list>
       </v-list>
     </v-navigation-drawer>
+
     <v-snackbar v-model="snack" :timeout="5000" :color="snackColor" location="top right">
       {{ snackText }}
     </v-snackbar>
+
     <v-dialog v-model="freeze" persistent max-width="290">
       <v-card>
-        <v-card-title class="text-h5">
-          {{ freezeTitle }}
-        </v-card-title>
+        <v-card-title class="text-h5">{{ freezeTitle }}</v-card-title>
         <v-card-text>{{ freezeMsg }}</v-card-text>
+      </v-card>
+    </v-dialog>
+
+    
+    <v-dialog v-model="salesHistoryDialog" max-width="800">
+      <v-card>
+        <v-card-title class="text-h5">Sales History</v-card-title>
+        <v-card-text>
+          <v-data-table v-if="salesInvoices.length" :headers="tableHeaders" :items="salesInvoices" dense>
+            <template v-slot:item="{ item, index }">
+              <tr>
+                <td>{{ index + 1 }}</td>
+                <td>{{ item.customer || "Walk-in Customer" }}</td>
+                <td>{{ item.name }}</td>
+                <td>${{ item.grand_total.toFixed(2) }}</td>
+                <td>
+                  <v-btn small color="primary" @click="printInvoice(item)">Print</v-btn>
+                </td>
+              </tr>
+            </template>
+          </v-data-table>
+          <v-alert v-else type="info">No sales found for today.</v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn color="red" @click="salesHistoryDialog = false">Close</v-btn>
+        </v-card-actions>
       </v-card>
     </v-dialog>
   </nav>
 </template>
 
 <script>
-
 export default {
-  // components: {MyPopup},
   data() {
     return {
       drawer: false,
       mini: true,
       item: 0,
       items: [{ text: 'POS', icon: 'mdi-network-pos' }],
-      page: '',
-      fav: true,
-      menu: false,
-      message: false,
-      hints: true,
+      pos_profile: {},
       menu_item: 0,
       snack: false,
       snackColor: '',
       snackText: '',
       company: 'POS Awesome',
       company_img: '/assets/erpnext/images/erpnext-logo.svg',
-      pos_profile: '',
       freeze: false,
       freezeTitle: '',
       freezeMsg: '',
-      last_invoice: '',
+      salesInvoices: [],
+      salesHistoryDialog: false,
+      tableHeaders: [
+        { text: "Sr. No", value: "index", sortable: false },
+        { text: "Customer Name", value: "customer" },
+        { text: "Invoice Number", value: "name" },
+        { text: "Amount", value: "grand_total" },
+        { text: "Actions", value: "actions", sortable: false },
+      ],
     };
   },
+  computed: {
+    showCloseShift() {
+      return this.pos_profile && !this.pos_profile.posa_hide_closing_shift;
+    },
+  },
   methods: {
-    changePage(key) {
-      this.$emit('changePage', key);
-    },
-    go_desk() {
-      frappe.set_route('/');
-      location.reload();
-    },
-    go_about() {
-      const win = window.open(
-        'https://github.com/yrestom/POS-Awesome',
-        '_blank'
-      );
-      win.focus();
+    openSalesHistory() {
+      console.log("Fetching sales history for POS Profile:", this.pos_profile.name);
+
+      frappe.call({
+        method: 'frappe.client.get_list',
+        args: {
+          doctype: 'Sales Invoice',
+          filters: {
+            pos_profile: this.pos_profile.name || '',
+            posting_date: frappe.datetime.nowdate(),
+          },
+          fields: ['name', 'customer', 'grand_total'],
+          order_by: 'creation desc',
+        },
+        callback: (r) => {
+          console.log("Sales History Response:", r);
+          this.salesInvoices = r.message || [];
+          this.salesHistoryDialog = true;
+        },
+        error: (err) => {
+          console.error("Error fetching sales history:", err);
+          this.show_message({ color: 'red', title: 'Failed to fetch sales history.' });
+        }
+      });
     },
     close_shift_dialog() {
       this.eventBus.emit('open_closing_dialog');
@@ -161,6 +172,29 @@ export default {
       this.snack = true;
       this.snackColor = data.color;
       this.snackText = data.title;
+    },
+    go_desk() {
+      frappe.set_route('/');
+      location.reload();
+    },
+    changePage(key) {
+      this.$emit('changePage', key);
+    },
+    go_about() {
+      const win = window.open(
+        'https://walnut.school/',
+        '_blank'
+      );
+      win.focus();
+    },
+    printInvoice(invoice) {
+      const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
+      const letter_head = this.pos_profile.letter_head || 0;
+      const url = `${frappe.urllib.get_base_url()}/printview?doctype=Sales%20Invoice&name=${invoice.name}&trigger_print=1&format=${print_format}&no_letterhead=${letter_head}`;
+      window.open(url, '_blank');
+      setTimeout(() => {
+        window.open(url, '_blank');
+      }, 1000);
     },
     logOut() {
       var me = this;
@@ -176,69 +210,14 @@ export default {
         },
       });
     },
-    print_last_invoice() {
-      if (!this.last_invoice) return;
-      const print_format =
-        this.pos_profile.print_format_for_online ||
-        this.pos_profile.print_format;
-      const letter_head = this.pos_profile.letter_head || 0;
-      const url =
-        frappe.urllib.get_base_url() +
-        '/printview?doctype=Sales%20Invoice&name=' +
-        this.last_invoice +
-        '&trigger_print=1' +
-        '&format=' +
-        print_format +
-        '&no_letterhead=' +
-        letter_head;
-      const printWindow = window.open(url, 'Print');
-      printWindow.addEventListener(
-        'load',
-        function () {
-          printWindow.print();
-        },
-        true
-      );
-    },
   },
-  created: function () {
-    this.$nextTick(function () {
-      this.eventBus.on('show_message', (data) => {
-        console.log("GOT Something: <s>")
-        console.log("the deubg", data)
-        this.show_message(data);
-      });
-      this.eventBus.on('set_company', (data) => {
-        this.company = data.name;
-        this.company_img = data.company_logo
-          ? data.company_logo
-          : this.company_img;
-      });
+  created() {
+    this.$nextTick(() => {
       this.eventBus.on('register_pos_profile', (data) => {
-        this.pos_profile = data.pos_profile;
-        const payments = { text: 'Payments', icon: 'mdi-cash-register' };
-        if (
-          this.pos_profile.posa_use_pos_awesome_payments &&
-          this.items.length !== 2
-        ) {
-          this.items.push(payments);
-        }
-      });
-      this.eventBus.on('set_last_invoice', (data) => {
-        this.last_invoice = data;
-      });
-      this.eventBus.on('freeze', (data) => {
-        this.freeze = true;
-        this.freezeTitle = data.title;
-        this.freezeMsg = data.msg;
-      });
-      this.eventBus.on('unfreeze', () => {
-        this.freeze = false;
-        this.freezTitle = '';
-        this.freezeMsg = '';
+        this.pos_profile = data.pos_profile || { name: '' };
       });
     });
-  },
+  }
 };
 </script>
 
