@@ -113,6 +113,75 @@ def get_pos_invoices(pos_opening_shift):
 
     return data
 
+def get_receivable_account(company):
+    """Fetch the default Receivable Account for the given company."""
+    return frappe.get_value("Account", 
+                            {"company": company, "account_type": "Receivable"}, 
+                            "name")
+
+
+def create_payment_entry(pos_closing_shift):
+    pos_shift = frappe.get_doc("POS Closing Shift", pos_closing_shift)
+    sales_invoice_ref = None
+    for txn in pos_shift.pos_transactions:
+        if txn.sales_invoice:
+            sales_invoice_ref = txn.sales_invoice
+            break  
+    if not sales_invoice_ref:
+        frappe.throw("No Sales Invoice found for POS Closing Shift. Cannot create Payment Entry.")
+
+    sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_ref)
+
+    customer = sales_invoice.customer
+    
+    company = pos_shift.company
+
+    for payment in pos_shift.payment_reconciliation:
+        if payment.closing_amount > 0:
+            # Define accounts based on Mode of Payment
+            paid_from = get_receivable_account(company)
+            paid_to = "Cash - A" if company == "Azoth" else "Debtors"
+
+            allocated_amount = payment.closing_amount
+            references = []
+            if sales_invoice.outstanding_amount > 0:
+                allocated_amount = min(payment.closing_amount, sales_invoice.outstanding_amount)
+                references.append({
+                    "reference_doctype": "Sales Invoice",
+                    "reference_name": sales_invoice_ref,
+                    "due_date": sales_invoice.due_date,
+                    "total_amount": sales_invoice.grand_total,
+                    "outstanding_amount": sales_invoice.outstanding_amount,
+                    "allocated_amount": allocated_amount,
+                    "account": paid_from
+                })
+
+            payment_entry = frappe.get_doc({
+                "doctype": "Payment Entry",
+                "payment_type": "Receive",
+                "posting_date": pos_shift.posting_date,
+                "company": company,
+                "mode_of_payment": payment.mode_of_payment,
+                "party_type": "Customer",
+                "party": customer,
+                "party_name": customer,
+                "paid_from": paid_from,
+                "paid_to": paid_to,
+                "paid_amount": payment.closing_amount,
+                "received_amount": payment.closing_amount,
+                "reference_no": pos_shift.name,
+                "reference_date": pos_shift.posting_date,
+                "status": "Submitted",
+                "remarks": f"Auto Payment Entry from POS Closing Shift {pos_shift.name}",
+
+                # Link Sales Invoice if there is an outstanding amount
+                "references": references
+            })
+
+            # Insert and submit Payment Entry
+            payment_entry.insert(ignore_permissions=True)
+            payment_entry.submit()
+
 
 @frappe.whitelist()
 def get_payments_entries(pos_opening_shift):
