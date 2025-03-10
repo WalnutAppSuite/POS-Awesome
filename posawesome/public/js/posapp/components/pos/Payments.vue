@@ -365,6 +365,7 @@ export default {
     invoice_doc: "",
     utrId : "",
     paymentError: "",
+    newPayments ="",
     loyalty_amount: 0,
     credit_sales_due_date: new Date(frappe.datetime.now_date()),
     is_credit_sale: 0,
@@ -397,9 +398,7 @@ export default {
       this.invoice_doc.payments = this.invoice_doc.payments.map((payment) =>
         payment.mode_of_payment === updatedPayment.mode_of_payment ? { ...payment, amount: updatedPayment.amount }: payment
       );
-      console.log("the payment updated is ", this.invoice_doc)
       const totalEntered = this.invoice_doc.payments.reduce((sum, p) => Number(sum) + (Number(p.amount) || 0), 0);
-      console.log("the total entered amount ", totalEntered)
       const totalAmount = Number(this.invoice_doc.grand_total || this.invoice_doc.grand_total);
       if (totalEntered > totalAmount){
         this.paymentError = `Total payment amount (${totalEntered}) exceeds invoice amount (${totalAmount})!`;
@@ -412,13 +411,10 @@ export default {
       } else{
         this.paymentErrors[updatedPayment.mode_of_payment] = "";
         this.invoice_doc.payments = newPayments;
-        console.log("the total ne", this.invoice_doc)
       }
     },
     saveUtrId() {
-      console.log("UTR ID Saved:", this.utrId);
       this.invoice_doc.custom_utr = this.utrId
-      console.log("this is the dat afer the ", this.invoice_doc)
     },
     submit(event, payment_received = false, print = false) {
       if (!this.invoice_doc.is_return && this.total_payments < 0) {
@@ -448,7 +444,6 @@ export default {
             color: "error",
           });
           frappe.utils.play_sound("error");
-          console.error("phone payment not requested");
           return;
         }
       }
@@ -533,7 +528,6 @@ export default {
         frappe.utils.play_sound("error");
         return;
       }
-      console.log("the utr when i submit", this.invoice_doc.custom_utr)
       this.invoice_doc.payments.forEach((payment) => {
           if (payment.mode_of_payment === "UPI" && payment.amount ) {
              if(!this.invoice_doc.custom_utr){

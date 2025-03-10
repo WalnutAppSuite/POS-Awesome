@@ -1270,7 +1270,6 @@ def get_payment_summary(pos_transactions):
         pos_transactions = json.loads(pos_transactions)
     total_upi = 0
     total_cash = 0
-    print(pos_transactions)
     for transaction in pos_transactions:
         sales_invoice = transaction.get("sales_invoice")
         if not sales_invoice:

@@ -142,7 +142,6 @@ export default {
   created() {
     this.eventBus.on('open_ClosingDialog', (data) => {
       this.closingDialog = true;
-      console.log("Received data for closing dialog:", data.pos_transactions);
 
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_payment_summary",
@@ -150,7 +149,6 @@ export default {
           pos_transactions: JSON.stringify(data.pos_transactions)
         },
         callback: (response) => {
-          console.log("API Response:", response.message);
 
           if (response.message) {
             this.cash_register = response.message.total_cash || 0;
