@@ -365,7 +365,7 @@ export default {
     invoice_doc: "",
     utrId : "",
     paymentError: "",
-    newPayments ="",
+    newPayments :"",
     loyalty_amount: 0,
     credit_sales_due_date: new Date(frappe.datetime.now_date()),
     is_credit_sale: 0,
