@@ -834,6 +834,15 @@ export default {
       } else if(this.pos_profile.name=="Uniform Wakad"){
         doc.school = "Walnut School at Wakad"
       }
+      if(this.items[0].actual_qty === 0){
+        console.log("we are inside inteproicess pos", doc)
+        doc.custom_advance_booking = 1;
+        doc.custom_booking_status = "Pending"
+      }else{
+        doc.update_stock = 1
+        doc.custom_advance_booking = 0;
+        doc.custom_booking_status = "Delivered"
+      }
       doc.doctype = "Sales Invoice";
       doc.is_pos = 1;
       doc.ignore_pricing_rule = 1;
@@ -842,6 +851,7 @@ export default {
       doc.campaign = doc.campaign || this.pos_profile.campaign;
       doc.currency = doc.currency || this.pos_profile.currency;
       doc.naming_series = doc.naming_series || this.pos_profile.naming_series;
+      doc.customer = this.customer;
       doc.customer = this.customer;
       doc.items = this.get_invoice_items();
       doc.total = this.subtotal;
@@ -1054,6 +1064,29 @@ export default {
     },
 
     async show_payment() {
+      console.log("this is item", this.items[0].actual_qty)
+      if (this.items[0].actual_qty === 0) {
+        frappe.confirm(
+            __(`The existing quantity {0} for item {1} is not enough. Do you want to proceed with Advance Booking?`, [
+                this.items[0].actual_qty,
+                this.items[0].item_name,
+            ]),
+            () => {
+                
+                this.eventBus.emit("show_payment", "true");
+                const invoice_doc = this.process_invoice();
+                this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
+            },
+            () => {
+                this.eventBus.emit("show_message", {
+                    title: __("Advance Booking Cancelled"),
+                    color: "warning",
+                  });
+                }
+            );
+            return;
+        }
+
       if (!this.customer) {
         this.eventBus.emit("show_message", {
           title: __(`Select a customer`),
@@ -1061,6 +1094,7 @@ export default {
         });
         return;
       }
+      
       if (!this.items.length) {
         this.eventBus.emit("show_message", {
           title: __(`Select items to sell`),
@@ -1071,11 +1105,13 @@ export default {
       if (!this.validate()) {
         return;
       }
+      console.log("the pay function get called")
       if (this.invoice_doc.doctype == "Sales Order") {
         this.eventBus.emit("show_payment", "true");
         const invoice_doc = await this.process_invoice_from_order();
         this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
       } else if (this.invoice_doc.doctype == "Sales Invoice") {
+        console.log("thisi s the ", this)
         const sales_invoice_item = this.invoice_doc.items[0];
         var sales_invoice_item_doc = {};
         frappe.call({
@@ -1097,6 +1133,7 @@ export default {
           const invoice_doc = await this.process_invoice_from_order();
           this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
         } else {
+
           this.eventBus.emit("show_payment", "true");
           const invoice_doc = this.process_invoice();
           this.eventBus.emit("send_invoice_doc_payment", invoice_doc);

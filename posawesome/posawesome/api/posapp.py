@@ -571,7 +571,7 @@ def submit_invoice(invoice, data):
                 "Company", invoice_doc.company, "default_cash_account"
             )
         }
-
+    
     # creating advance payment
     if data.get("credit_change"):
         advance_payment_entry = frappe.get_doc(
@@ -1261,6 +1261,36 @@ def search_orders(company, currency, order_name=None):
     for order in orders_list:
         data.append(frappe.get_doc("Sales Order", order["name"]))
     return data
+
+
+
+@frappe.whitelist()
+def get_payment_summary(pos_transactions):
+    if isinstance(pos_transactions, str):
+        pos_transactions = json.loads(pos_transactions)
+    total_upi = 0
+    total_cash = 0
+    print(pos_transactions)
+    for transaction in pos_transactions:
+        sales_invoice = transaction.get("sales_invoice")
+        if not sales_invoice:
+            continue
+
+        # Fetch Sales Invoice document
+        sales_invoice_doc = frappe.get_doc("Sales Invoice", sales_invoice)
+
+        # Check payments
+        for payment in sales_invoice_doc.payments:
+            if payment.mode_of_payment == "UPI":
+                total_upi += payment.amount
+            elif payment.mode_of_payment == "Cash":
+                total_cash += payment.amount
+
+    return {
+        "total_upi": total_upi,
+        "total_cash": total_cash
+    }
+
 
 
 def get_version():
