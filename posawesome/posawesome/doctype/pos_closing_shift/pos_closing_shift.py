@@ -113,34 +113,48 @@ def get_pos_invoices(pos_opening_shift):
 
     return data
 
-def get_receivable_account(company):
-    """Fetch the default Receivable Account for the given company."""
-    return frappe.get_value("Account", 
-                            {"company": company, "account_type": "Receivable"}, 
-                            "name")
+def get_default_account(mode_of_payment, company):
+    return frappe.db.get_value(
+        "Mode of Payment Account",
+        {
+            "parent": mode_of_payment,
+            "company": company,
+            "parenttype": "Mode of Payment"
+        },
+        "default_account"
+    )
 
 
-def create_payment_entry(pos_closing_shift):
-    pos_shift = frappe.get_doc("POS Closing Shift", pos_closing_shift)
+def create_payment_entry(pos_closing_shift, method=None):
+    frappe.log_error("Creating Payment Entry for POS Closing Shift", pos_closing_shift.name)
+    pos_shift = frappe.get_doc("POS Closing Shift", pos_closing_shift.name)
     sales_invoice_ref = None
+    frappe.log_error("POS Transactions", frappe.as_json(pos_shift.pos_transactions))
+
     for txn in pos_shift.pos_transactions:
         if txn.sales_invoice:
             sales_invoice_ref = txn.sales_invoice
             break  
+
     if not sales_invoice_ref:
         frappe.throw("No Sales Invoice found for POS Closing Shift. Cannot create Payment Entry.")
 
     sales_invoice = frappe.get_doc("Sales Invoice", sales_invoice_ref)
 
     customer = sales_invoice.customer
-    
+    debit_to = sales_invoice.debit_to
     company = pos_shift.company
+    frappe.log_error("Payment Reconciliation", frappe.as_json(pos_shift.payment_reconciliation))
 
     for payment in pos_shift.payment_reconciliation:
         if payment.closing_amount > 0:
-            # Define accounts based on Mode of Payment
-            paid_from = get_receivable_account(company)
-            paid_to = "Cash - A" if company == "Azoth" else "Debtors"
+            mode_of_payment = payment.mode_of_payment
+            if mode_of_payment == "Cash":
+                paid_from = debit_to
+                paid_to = get_default_account("Cash", company)
+            elif mode_of_payment == "UPI":
+                paid_from = debit_to
+                paid_to = get_default_account("UPI", company)
 
             allocated_amount = payment.closing_amount
             references = []
@@ -173,14 +187,14 @@ def create_payment_entry(pos_closing_shift):
                 "reference_date": pos_shift.posting_date,
                 "status": "Submitted",
                 "remarks": f"Auto Payment Entry from POS Closing Shift {pos_shift.name}",
-
-                # Link Sales Invoice if there is an outstanding amount
                 "references": references
             })
 
-            # Insert and submit Payment Entry
+            frappe.log_error("Payment Entry Data", frappe.as_json(payment_entry))
             payment_entry.insert(ignore_permissions=True)
             payment_entry.submit()
+            frappe.log_error("Payment Entry Submitted", payment_entry.name)
+
 
 
 @frappe.whitelist()
@@ -217,9 +231,7 @@ def make_closing_shift_from_opening(opening_shift):
     closing_shift.grand_total = 0
     closing_shift.net_total = 0
     closing_shift.total_quantity = 0
-
     invoices = get_pos_invoices(opening_shift.get("name"))
-
     pos_transactions = []
     taxes = []
     payments = []
@@ -234,7 +246,6 @@ def make_closing_shift_from_opening(opening_shift):
                 }
             )
         )
-
     for d in invoices:
         pos_transactions.append(
             frappe._dict(
@@ -249,7 +260,6 @@ def make_closing_shift_from_opening(opening_shift):
         closing_shift.grand_total += flt(d.grand_total)
         closing_shift.net_total += flt(d.net_total)
         closing_shift.total_quantity += flt(d.total_qty)
-
         for t in d.taxes:
             existing_tax = [
                 tx
@@ -268,7 +278,6 @@ def make_closing_shift_from_opening(opening_shift):
                         }
                     )
                 )
-
         for p in d.payments:
             existing_pay = [
                 pay for pay in payments if pay.mode_of_payment == p.mode_of_payment
@@ -296,9 +305,7 @@ def make_closing_shift_from_opening(opening_shift):
                         }
                     )
                 )
-
     pos_payments = get_payments_entries(opening_shift.get("name"))
-
     for py in pos_payments:
         pos_payments_table.append(
             frappe._dict(
@@ -326,7 +333,6 @@ def make_closing_shift_from_opening(opening_shift):
                     }
                 )
             )
-
     closing_shift.set("pos_transactions", pos_transactions)
     closing_shift.set("payment_reconciliation", payments)
     closing_shift.set("taxes", taxes)
@@ -336,7 +342,8 @@ def make_closing_shift_from_opening(opening_shift):
 
 @frappe.whitelist()
 def submit_closing_shift(closing_shift):
-    closing_shift = json.loads(closing_shift)
+    if isinstance(closing_shift, str):
+        closing_shift = json.loads(closing_shift)
     closing_shift_doc = frappe.get_doc(closing_shift)
     closing_shift_doc.flags.ignore_permissions = True
     closing_shift_doc.save()

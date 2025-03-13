@@ -355,6 +355,7 @@ export default {
   methods: {
     check_opening_entry() {
       var vm = this;
+      console.log("we are in paymetn page")
       return frappe
         .call("posawesome.posawesome.api.posapp.check_opening_shift", {
           user: frappe.session.user,
@@ -397,6 +398,7 @@ export default {
           }
         });
     },
+    
     create_opening_voucher() {
       this.dialog = true;
     },

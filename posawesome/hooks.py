@@ -103,7 +103,7 @@ doc_events = {
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
     "POS Closing Shift": {
-        "after_submit": 'posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.create_payment_entry',
+        "on_submit": 'posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.create_payment_entry',
     },
 }
 
