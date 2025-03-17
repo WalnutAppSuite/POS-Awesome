@@ -5,8 +5,6 @@
         <v-card-title>
           <span class="text-h5 text-primary font-weight-bold">{{ __('Closing POS Shift') }}</span>
         </v-card-title>
-
-        
         <v-card-text class="pa-4">
           <v-container>
             <v-row>
@@ -15,7 +13,6 @@
                 :key="index" 
                 cols="12"
               >
-               
                 <v-card 
                   :class="{ 'hover-effect': isHovered[index] }"
                   :elevation="isHovered[index] ? 10 : 2"
@@ -30,7 +27,6 @@
 
                   <v-card-text>
                     <v-row>
-                     
                       <v-col cols="6">
                         <span class="font-weight-bold">Sale via Mode</span>
                       </v-col>
@@ -38,7 +34,6 @@
                         {{ currencySymbol(pos_profile.currency) }} {{ formatCurrency(item.sales) }}
                       </v-col>
 
-                      
                       <v-col cols="6">
                         <span class="font-weight-bold">Opening Amount</span>
                       </v-col>
@@ -46,13 +41,15 @@
                         {{ currencySymbol(pos_profile.currency) }} {{ formatCurrency(item.opening_amount) }}
                       </v-col>
 
-                     
-                      <v-col cols="6">
-                        <span class="font-weight-bold">Returns</span>
-                      </v-col>
-                      <v-col cols="6" class="text-right text-h6">
-                        {{ currencySymbol(pos_profile.currency) }} {{ formatCurrency(item.returns) }}
-                      </v-col>
+                      <!-- Show Returns only for Cash -->
+                      <template v-if="item.mode_of_payment === 'Cash'">
+                        <v-col cols="6">
+                          <span class="font-weight-bold">Returns</span>
+                        </v-col>
+                        <v-col cols="6" class="text-right text-h6">
+                          {{ currencySymbol(pos_profile.currency) }} {{ formatCurrency(item.returns) }}
+                        </v-col>
+                      </template>
 
                       <v-col cols="6">
                         <span class="font-weight-bold">Closing Amount</span>
@@ -76,7 +73,6 @@
                         {{ currencySymbol(pos_profile.currency) }} {{ formatCurrency(item.expected_amount) }}
                       </v-col>
 
-                      
                       <v-col cols="6">
                         <span class="font-weight-bold">Difference</span>
                       </v-col>
@@ -141,7 +137,14 @@ export default {
 
   created() {
     this.eventBus.on('open_ClosingDialog', (data) => {
+      console.log("the data", data);
       this.closingDialog = true;
+      let total_returns = 0;
+      data.pos_transactions.forEach((item) => {
+        if (item.grand_total < 0) {
+          total_returns += Math.abs(item.grand_total);
+        }
+      });
 
       frappe.call({
         method: "posawesome.posawesome.api.posapp.get_payment_summary",
@@ -149,14 +152,11 @@ export default {
           pos_transactions: JSON.stringify(data.pos_transactions)
         },
         callback: (response) => {
-
           if (response.message) {
-            this.cash_register = response.message.total_cash || 0;
+            this.cash_register = response.message.total_cash || 0;  
             this.upi_register = response.message.total_upi || 0;
-
             const updatedPaymentReconciliation = (data.payment_reconciliation || []).map((item) => {
               let sale_via_mode_of_payment = 0;
-
               if (item.mode_of_payment === "Cash") {
                 sale_via_mode_of_payment = this.cash_register;
               } else if (item.mode_of_payment === "UPI") {
@@ -164,14 +164,20 @@ export default {
               }
 
               const opening_amount = item.opening_amount || 0;
-              const returns = item.returns || 0;
-              const closing_amount = opening_amount + sale_via_mode_of_payment - returns;
-              const expected_amount = opening_amount + sale_via_mode_of_payment - returns;
+              const returns = item.mode_of_payment === "Cash" ? total_returns : 0;
+
+              let closing_amount =
+                item.mode_of_payment === "Cash"
+                  ? sale_via_mode_of_payment + opening_amount - returns
+                  : sale_via_mode_of_payment;
+
+              const expected_amount = closing_amount;
               const difference = closing_amount - expected_amount;
 
               return {
                 ...item,
                 sales: sale_via_mode_of_payment,
+                returns,
                 closing_amount,
                 expected_amount,
                 difference,
