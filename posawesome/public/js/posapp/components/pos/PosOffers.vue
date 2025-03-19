@@ -236,11 +236,11 @@ export default {
         this.pos_profile = data.pos_profile;
       });
     });
-    this.eventBus.on('update_customer', (customer) => {
-      if (this.customer != customer) {
-        this.offers = [];
-      }
-    });
+    // this.eventBus.on('update_customer', (customer) => {
+    //   if (this.customer != customer) {
+    //     this.offers = [];
+    //   }
+    // });
     this.eventBus.on('update_pos_offers', (data) => {
       this.updatePosOffers(data);
     });

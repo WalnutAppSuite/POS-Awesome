@@ -533,9 +533,9 @@ export default {
     this.eventBus.on("update_customer_price_list", (data) => {
       this.customer_price_list = data;
     });
-    this.eventBus.on("update_customer", (data) => {
-      this.customer = data;
-    });
+    // this.eventBus.on("update_customer", (data) => {
+    //   this.customer = data;
+    // });
   },
 
   mounted() {

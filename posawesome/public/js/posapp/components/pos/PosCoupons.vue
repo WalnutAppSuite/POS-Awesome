@@ -184,23 +184,23 @@ export default {
         this.pos_profile = data.pos_profile;
       });
     });
-    this.eventBus.on('update_customer', (customer) => {
-      if (this.customer != customer) {
-        const to_remove = [];
-        this.posa_coupons.forEach((el) => {
-          if (el.type == 'Promotional') {
-            el.customer = customer;
-          } else {
-            to_remove.push(el.coupon);
-          }
-        });
-        this.customer = customer;
-        if (to_remove.length) {
-          this.removeCoupon(to_remove);
-        }
-      }
-      this.setActiveGiftCoupons();
-    });
+    // this.eventBus.on('update_customer', (customer) => {
+    //   if (this.customer != customer) {
+    //     const to_remove = [];
+    //     this.posa_coupons.forEach((el) => {
+    //       if (el.type == 'Promotional') {
+    //         el.customer = customer;
+    //       } else {
+    //         to_remove.push(el.coupon);
+    //       }
+    //     });
+    //     this.customer = customer;
+    //     if (to_remove.length) {
+    //       this.removeCoupon(to_remove);
+    //     }
+    //   }
+    //   this.setActiveGiftCoupons();
+    // });
     this.eventBus.on('update_pos_coupons', (data) => {
       this.updatePosCoupons(data);
     });
