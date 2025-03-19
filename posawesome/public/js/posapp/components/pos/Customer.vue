@@ -36,6 +36,7 @@
 
 <script>
 import UpdateCustomer from './UpdateCustomer.vue';
+import { debounce } from "lodash";
 
 export default {
   data: () => ({
@@ -174,6 +175,9 @@ export default {
   },
 
   created: function () {
+    this.debouncedEmitCustomer = debounce((customer) => {
+      this.eventBus.emit('update_customer', customer);
+    }, 600);
     this.$nextTick(function () {
       this.eventBus.on('register_pos_profile', (pos_profile) => {
         this.pos_profile = pos_profile;
@@ -203,7 +207,7 @@ export default {
 
   watch: {
     customer() {
-      this.eventBus.emit('update_customer', this.customer);
+     this.debouncedEmitCustomer?.(this.customer);
     },
   },
 };
