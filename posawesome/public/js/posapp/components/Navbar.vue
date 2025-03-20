@@ -155,6 +155,8 @@ export default {
           },
           fields: ['name', 'customer', 'grand_total'],
           order_by: 'creation desc',
+          limit_page_length: 1000,
+          limit_start: 0,
         },
         callback: (r) => {
           console.log("Sales History Response:", r);
