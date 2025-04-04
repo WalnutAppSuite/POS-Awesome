@@ -227,8 +227,8 @@
           label="UTR ID" 
           bg-color="white" 
           hide-details
-          v-model="utrId">
-        </v-text-field>
+          v-model="utrId"
+        ></v-text-field>
         <v-btn class="mt-3" color="primary"  @click="saveUtrId">Save UTR ID</v-btn>
         <v-divider></v-divider>
         <v-row class="px-1 py-0" align="start" no-gutters>
@@ -357,6 +357,9 @@
 <script>
 
 import format from "../../format";
+import eventBus from "../../bus";
+
+
 export default {
   mixins: [format],
   data: () => ({
@@ -414,8 +417,16 @@ export default {
       }
     },
     saveUtrId() {
-      this.invoice_doc.custom_utr = this.utrId
+      // Save the entered UTR ID to invoice_doc
+      this.invoice_doc.custom_utr = this.utrId;
+
+      // Log the saved UTR ID (for debugging)
+      console.log("Saved UTR ID:", this.invoice_doc.custom_utr);
+
+      // Reset the input field after saving
+      this.utrId = "";
     },
+
     submit(event, payment_received = false, print = false) {
       if (!this.invoice_doc.is_return && this.total_payments < 0) {
         this.eventBus.emit("show_message", {
@@ -512,9 +523,6 @@ export default {
         frappe.utils.play_sound("error");
         return;
       }
-      if(this.invoice_doc.custom_advance_booking===1){
-        this.invoice_doc.update_stock =0
-      }
       
       if (
         !this.invoice_doc.is_return &&
@@ -580,6 +588,8 @@ export default {
             return;
           }
           if (print) {
+            console.log("the sales invoice", vm)
+            console.log("the sales invoice doc", vm.invoice_doc)
             vm.load_print_page();
           }
           vm.customer_credit_dict = [];
@@ -625,23 +635,38 @@ export default {
         payment.amount = 0;
       });
     },
+    
     load_print_page() {
-      const print_format =
-        this.pos_profile.print_format_for_online ||
-        this.pos_profile.print_format;
-      const letter_head = this.pos_profile.letter_head || 0;
-      const url = frappe.urllib.get_base_url() + "/printview?doctype=Sales%20Invoice&name=" + this.invoice_doc.name + "&trigger_print=1" + "&format=" + print_format + "&no_letterhead=" + letter_head;
-      const printWindow = window.open(url, "Print");
-      printWindow.addEventListener(
-        "load",
-        function () {
-          printWindow.print();
-          setTimeout(() => {
-            printWindow.print();
-          }, 1000);
-        },
-        true
-      );
+        const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
+        const letter_head = this.pos_profile.letter_head || 0;
+        const url = `${frappe.urllib.get_base_url()}/printview?doctype=Sales%20Invoice&name=${this.invoice_doc.name}&trigger_print=2&format=${print_format}&no_letterhead=${letter_head}`;
+
+        // Create a hidden iframe
+        const iframe = document.createElement("iframe");
+        Object.assign(iframe.style, {
+            visibility: "hidden",
+            position: "absolute",
+            width: "0px",
+            height: "0px"
+        });
+        iframe.src = url;
+        document.body.appendChild(iframe);
+
+        // Auto-print when iframe loads
+        iframe.onload = () => {
+            try {
+                iframe.contentWindow.print();
+            } catch (error) {
+                console.error("Print failed:", error);
+                frappe.show_alert({ message: __('Print failed. Please try again.'), indicator: 'red' });
+            }
+        };
+
+        // Remove iframe after printing
+        iframe.contentWindow?.addEventListener("afterprint", () => document.body.removeChild(iframe));
+
+        // Fallback cleanup if afterprint fails
+        setTimeout(() => document.body.removeChild(iframe), 8000);
     },
     validate_due_date() {
       const today = frappe.datetime.now_date();

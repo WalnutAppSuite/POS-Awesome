@@ -410,6 +410,7 @@
 
 import format from "../../format";
 import Customer from "./Customer.vue";
+import eventBus from "../../bus";
 
 export default {
   mixins: [format],
@@ -834,15 +835,14 @@ export default {
       } else if(this.pos_profile.name=="Uniform Wakad"){
         doc.school = "Walnut School at Wakad"
       }
-      if(this.items[0].actual_qty === 0){
-        console.log("we are inside inteproicess pos", doc)
+      if (this.items[0].actual_qty <= 0 && this.invoiceType === "Invoice") {
         doc.custom_advance_booking = 1;
         doc.custom_booking_status = "Pending"
       }else{
-        doc.update_stock = 1
         doc.custom_advance_booking = 0;
         doc.custom_booking_status = "Delivered"
       }
+      doc.update_stock = 1
       doc.doctype = "Sales Invoice";
       doc.is_pos = 1;
       doc.ignore_pricing_rule = 1;
@@ -1064,15 +1064,16 @@ export default {
     },
 
     async show_payment() {
-      console.log("this is item", this.items[0].actual_qty)
-      if (this.items[0].actual_qty === 0) {
+    console.log("this is the this", this);
+
+    // Check if any item has actual_qty <= 0
+    let outOfStockItems = this.items.filter(item => item.actual_qty <= 0);
+
+    if (outOfStockItems.length > 0 && this.invoiceType == "Invoice") {
+        let itemDetails = outOfStockItems.map(item => `${item.item_name} (${item.actual_qty})`).join(", ");
         frappe.confirm(
-            __(`The existing quantity {0} for item {1} is not enough. Do you want to proceed with Advance Booking?`, [
-                this.items[0].actual_qty,
-                this.items[0].item_name,
-            ]),
+            __(`The existing quantity for the following items is not enough: ${itemDetails}. Do you want to proceed with Advance Booking?`),
             () => {
-                
                 this.eventBus.emit("show_payment", "true");
                 const invoice_doc = this.process_invoice();
                 this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
@@ -1081,68 +1082,70 @@ export default {
                 this.eventBus.emit("show_message", {
                     title: __("Advance Booking Cancelled"),
                     color: "warning",
-                  });
-                }
-            );
-            return;
-        }
+                });
+            }
+        );
+        return;
+    }
 
-      if (!this.customer) {
+    if (!this.customer) {
         this.eventBus.emit("show_message", {
-          title: __(`Select a customer`),
-          color: "error",
+            title: __(`Select a customer`),
+            color: "error",
         });
         return;
-      }
-      
-      if (!this.items.length) {
+    }
+
+    if (!this.items.length) {
         this.eventBus.emit("show_message", {
-          title: __(`Select items to sell`),
-          color: "error",
+            title: __(`Select items to sell`),
+            color: "error",
         });
         return;
-      }
-      if (!this.validate()) {
+    }
+
+    if (!this.validate()) {
         return;
-      }
-      console.log("the pay function get called")
-      if (this.invoice_doc.doctype == "Sales Order") {
+    }
+
+    console.log("the pay function get called");
+
+    if (this.invoice_doc.doctype == "Sales Order") {
         this.eventBus.emit("show_payment", "true");
         const invoice_doc = await this.process_invoice_from_order();
         this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
-      } else if (this.invoice_doc.doctype == "Sales Invoice") {
-        console.log("thisi s the ", this)
-        const sales_invoice_item = this.invoice_doc.items[0];
-        var sales_invoice_item_doc = {};
-        frappe.call({
-          method:
-            "posawesome.posawesome.api.posapp.get_sales_invoice_child_table",
+    } else if (this.invoice_doc.doctype == "Sales Invoice") {
+      const sales_invoice_item = this.invoice_doc.items[0];
+      let sales_invoice_item_doc = {};
+
+      frappe.call({
+          method: "posawesome.posawesome.api.posapp.get_sales_invoice_child_table",
           args: {
-            sales_invoice: this.invoice_doc.name,
-            sales_invoice_item: sales_invoice_item.name,
+              sales_invoice: this.invoice_doc.name,
+              sales_invoice_item: sales_invoice_item.name,
           },
           async: false,
           callback: function (r) {
-            if (r.message) {
-              sales_invoice_item_doc = r.message;
-            }
+              if (r.message) {
+                  sales_invoice_item_doc = r.message;
+              }
           },
         });
-        if (sales_invoice_item_doc.sales_order) {
-          this.eventBus.emit("show_payment", "true");
-          const invoice_doc = await this.process_invoice_from_order();
-          this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
-        } else {
 
-          this.eventBus.emit("show_payment", "true");
-          const invoice_doc = this.process_invoice();
-          this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
+        if (sales_invoice_item_doc.sales_order) {
+            this.eventBus.emit("show_payment", "true");
+            const invoice_doc = await this.process_invoice_from_order();
+            this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
+        } else {
+            this.eventBus.emit("show_payment", "true");
+            const invoice_doc = this.process_invoice();
+            this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
         }
       } else {
         this.eventBus.emit("show_payment", "true");
         const invoice_doc = this.process_invoice();
         this.eventBus.emit("send_invoice_doc_payment", invoice_doc);
-      }
+     }
     },
 
     validate() {
@@ -1713,7 +1716,7 @@ export default {
     },
 
     shortOpenFirstItem(e) {
-      if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
+      if (e.key === "f" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         this.expanded = [];
         this.expanded.push(this.items[0]);
@@ -2178,6 +2181,22 @@ export default {
       this.deleteOfferFromItems(invoiceOffer);
     },
 
+    showNotification(color, message) {
+      if(color === "success"){
+        showColor = "green"
+      }else if(color === "error"){
+        showColor = "red"
+      } else{
+        showColor = "orange"
+      }
+      console.log("the color is", color)
+          frappe.msgprint({
+              title: message,
+              message: message,
+              indicator: showColor,
+          });
+    },
+
     applyNewOffer(offer) {
       if (offer.offer === "Item Price") {
         this.ApplyOnPrice(offer);
@@ -2568,6 +2587,10 @@ export default {
       this.new_order(data);
       // this.eventBus.emit("set_pos_coupons", data.posa_coupons);
     });
+    this.eventBus.on("show_message", (data) => {
+            console.log(`${data.color.toUpperCase()}: ${data.title}`);
+           this.showNotification(data.color, data.title);(`${data.color.toUpperCase()}: ${data.title}`);
+    });
     this.eventBus.on("set_offers", (data) => {
       this.posOffers = data;
     });
@@ -2596,6 +2619,7 @@ export default {
     });
   },
   beforeUnmount() {
+    eventBus.off("show_message");
     evntBus.$off("register_pos_profile");
     evntBus.$off("add_item");
     evntBus.$off("update_customer");
