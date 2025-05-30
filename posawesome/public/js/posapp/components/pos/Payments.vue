@@ -399,14 +399,10 @@ export default {
       this.eventBus.emit("show_payment", "false");
       this.eventBus.emit("set_customer_readonly", false);
     },
-    validateAndUpdatePayment(updatedPayment){
-      this.invoice_doc.payments = this.invoice_doc.payments.map((payment) =>
-        payment.mode_of_payment === updatedPayment.mode_of_payment ? { ...payment, amount: updatedPayment.amount }: payment
-      );
-      
+
+    amountExceeds(){
       this.actual_payment = Number(this.invoice_doc.rounded_total || this.invoice_doc.grand_total);
       
-      // Calculate and store entered payment (cash + UPI)
       let cashAmount = 0;
       let upiAmount = 0;
       
@@ -419,22 +415,21 @@ export default {
       });
       
       this.entered_payment = cashAmount + upiAmount;
-      console.log("enter payment",this.entered_payment)
       const totalEntered = this.invoice_doc.payments.reduce((sum, p) => Number(sum) + (Number(p.amount) || 0), 0);
-      
       if (totalEntered > this.actual_payment && !this.invoice_doc.is_return){
-        this.paymentError = `Total payment amount (${this.formatCurrency(totalEntered)}) exceeds invoice amount (${this.formatCurrency(this.actual_payment)})!`;
-        frappe.utils.play_sound("error");
-        frappe.throw(this.paymentError);
-        return;
+        return true
       } else{
-        this.paymentError = "";
+        return false
       }
-      
-      if (this.entered_payment > this.actual_payment && !this.invoice_doc.is_return) {
-        this.paymentError = `Combined Cash and UPI payments (${this.formatCurrency(this.entered_payment)}) exceed the total amount (${this.formatCurrency(this.actual_payment)})!`;
-        frappe.utils.play_sound("error");
-        frappe.throw(this.paymentError);
+
+    },
+
+    validateAndUpdatePayment(updatedPayment){
+      this.invoice_doc.payments = this.invoice_doc.payments.map((payment) =>
+        payment.mode_of_payment === updatedPayment.mode_of_payment ? { ...payment, amount: updatedPayment.amount }: payment
+      );
+      if(this.amountExceeds()){
+        frappe.throw("Total payment amount exceeds invoice amount!")
       }
     },
     saveUtrId() {
@@ -443,32 +438,9 @@ export default {
     },
 
     submit(event, payment_received = false, print = false) {
-      this.actual_payment = Number(this.invoice_doc.rounded_total || this.invoice_doc.grand_total);
-      
-      let cashAmount = 0;
-      let upiAmount = 0;
-      
-      this.invoice_doc.payments.forEach((payment) => {
-        if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "cash") {
-          cashAmount += this.flt(payment.amount || 0);
-        } else if (payment.mode_of_payment && payment.mode_of_payment.toLowerCase() === "upi") {
-          upiAmount += this.flt(payment.amount || 0);
-        }
-      });
-
-      this.entered_payment = cashAmount + upiAmount;
-
-      const totalEntered = this.invoice_doc.payments.reduce(
-        (sum, p) => Number(sum) + (Number(p.amount) || 0),
-        0
-      );
-      
-      if (totalEntered > this.actual_payment && !this.invoice_doc.is_return) {
-        frappe.throw(`Total payment amount (${this.formatCurrency(totalEntered)}) exceeds invoice amount (${this.formatCurrency(this.actual_payment)})!`);
-        return;
+      if(this.amountExceeds()){
+        frappe.throw("Total payment amount exceeds invoice amount!")
       }
-      
-      
       if (!this.invoice_doc.is_return && this.total_payments < 0) {
         this.eventBus.emit("show_message", {
           title: `Payments not correct`,
@@ -607,8 +579,7 @@ export default {
         frappe.throw(`checking (${this.formatCurrency(this.entered_payment)}) exceed the total amount (${this.formatCurrency(this.actual_payment)})!`);
         return;
       }
-    
-      console.log("enter payment",this.entered_payment, this.actual_payment)
+        
       let data = {};
       data["total_change"] = !this.invoice_doc.is_return
         ? -this.diff_payment
