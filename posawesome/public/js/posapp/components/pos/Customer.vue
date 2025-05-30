@@ -36,6 +36,7 @@
 
 <script>
 import UpdateCustomer from './UpdateCustomer.vue';
+import { debounce } from "lodash";
 
 export default {
   data: () => ({
@@ -56,7 +57,6 @@ export default {
     get_customer_names() {
       var vm = this;
       if (this.customers.length > 0) return;
-      console.log('Fetching customers for POS Profile:', this.pos_profile.pos_profile.name);
       if (vm.pos_profile.posa_local_storage && localStorage.customer_storage) {
         vm.customers = JSON.parse(localStorage.getItem('customer_storage'));
       }
@@ -82,13 +82,16 @@ export default {
       }
 
       let vm = this;
-      console.log('Fetching customers for POS Profile:', this.pos_profile.pos_profile.name);
-      console.log('Fetching customers for POS Profile:', this.customer);
-      if(
-        (this.pos_profile.pos_profile.name === "Uniform Fursungi" && this.customer.startsWith("FU")) ||
-        (this.pos_profile.pos_profile.name === "Uniform Shivane" && this.customer.startsWith("SH")) ||
-        (this.pos_profile.pos_profile.name === "Uniform Wakad" && this.customer.startsWith("WA"))
-      ){
+      const profiles = [
+        { name: "Uniform Fursungi", prefix: "FU" },
+        { name: "Uniform Shivane", prefix: "SH" },
+        { name: "Uniform Wakad", prefix: "WA" }
+      ];
+
+      if (profiles.some(profile =>
+          this.pos_profile.pos_profile.name === profile.name &&
+          this.customer.startsWith(profile.prefix)
+        )){
         frappe.call({
           method: 'frappe.client.get_list',
           args: {
@@ -172,6 +175,9 @@ export default {
   },
 
   created: function () {
+    this.debouncedEmitCustomer = debounce((customer) => {
+      this.eventBus.emit('update_customer', customer);
+    }, 600);
     this.$nextTick(function () {
       this.eventBus.on('register_pos_profile', (pos_profile) => {
         this.pos_profile = pos_profile;
@@ -201,7 +207,7 @@ export default {
 
   watch: {
     customer() {
-      this.eventBus.emit('update_customer', this.customer);
+     this.debouncedEmitCustomer?.(this.customer);
     },
   },
 };

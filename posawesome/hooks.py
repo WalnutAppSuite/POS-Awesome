@@ -102,6 +102,9 @@ doc_events = {
         "validate": "posawesome.posawesome.api.customer.validate",
         "after_insert": "posawesome.posawesome.api.customer.after_insert",
     },
+    "POS Closing Shift": {
+        "on_submit": 'posawesome.posawesome.doctype.pos_closing_shift.pos_closing_shift.create_payment_entry',
+    },
 }
 
 # Scheduled Tasks

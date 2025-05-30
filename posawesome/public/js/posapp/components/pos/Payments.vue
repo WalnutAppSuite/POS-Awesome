@@ -34,12 +34,19 @@
         <div v-if="is_cashback">
           <v-row class="pyments px-1 py-0" v-for="payment in invoice_doc.payments" :key="payment.name">
             <v-col cols="6" v-if="!is_mpesa_c2b_payment(payment)">
-              <v-text-field density="compact" variant="outlined" color="primary"
-                :label="frappe._(payment.mode_of_payment)" bg-color="white" hide-details
-                :model-value="formatCurrency(payment.amount)" @change="
-                  setFormatedCurrency(payment, 'amount', null, true, $event)
-                  " :rules="[isNumber]" :prefix="currencySymbol(invoice_doc.currency)"
-                @focus="set_rest_amount(payment.idx)" :readonly="invoice_doc.is_return ? true : false"></v-text-field>
+              <v-text-field 
+                density="compact" 
+                variant="outlined" 
+                color="primary"
+                :label="frappe._(payment.mode_of_payment)" 
+                bg-color="white" 
+                hide-details
+                v-model="payment.amount" 
+                @change="validateAndUpdatePayment(payment)"
+                :rules="[isNumber, paymentError]"
+                :prefix="currencySymbol(invoice_doc.currency)"
+                :readonly="invoice_doc.is_return ? true : false">
+              </v-text-field>
             </v-col>
             <v-col v-if="!is_mpesa_c2b_payment(payment)" :cols="6
               ? (payment.type != 'Phone' ||
@@ -48,8 +55,6 @@
               !is_mpesa_c2b_payment(payment)
               : 3
               ">
-              <v-btn block class="" color="primary" theme="dark" @click="set_full_amount(payment.idx)">{{
-                payment.mode_of_payment }}</v-btn>
             </v-col>
             <v-col v-if="is_mpesa_c2b_payment(payment)" :cols="12" class="pl-3">
               <v-btn block class="" color="success" theme="dark" @click="mpesa_c2b_dialg(payment)">
@@ -193,7 +198,6 @@
               :model-value="invoice_doc.posa_notes"></v-textarea>
           </v-col>
         </v-row>
-
         <div v-if="pos_profile.posa_allow_customer_purchase_order">
           <v-divider></v-divider>
           <v-row class="px-1 py-0" justify="center" align="start">
@@ -215,6 +219,17 @@
             </v-col>
           </v-row>
         </div>
+        <v-text-field 
+          class="mt-4"
+          density="compact" 
+          variant="outlined" 
+          color="primary"
+          label="UTR ID" 
+          bg-color="white" 
+          hide-details
+          v-model="utrId"
+        ></v-text-field>
+        <v-btn class="mt-3" color="primary"  @click="saveUtrId">Save UTR ID</v-btn>
         <v-divider></v-divider>
         <v-row class="px-1 py-0" align="start" no-gutters>
           <v-col cols="6" v-if="
@@ -342,12 +357,18 @@
 <script>
 
 import format from "../../format";
+import eventBus from "../../bus";
+
+
 export default {
   mixins: [format],
   data: () => ({
     loading: false,
     pos_profile: "",
     invoice_doc: "",
+    utrId : "",
+    paymentError: "",
+    newPayments :"",
     loyalty_amount: 0,
     credit_sales_due_date: new Date(frappe.datetime.now_date()),
     is_credit_sale: 0,
@@ -376,6 +397,36 @@ export default {
       this.eventBus.emit("show_payment", "false");
       this.eventBus.emit("set_customer_readonly", false);
     },
+    validateAndUpdatePayment(updatedPayment){
+      this.invoice_doc.payments = this.invoice_doc.payments.map((payment) =>
+        payment.mode_of_payment === updatedPayment.mode_of_payment ? { ...payment, amount: updatedPayment.amount }: payment
+      );
+      const totalEntered = this.invoice_doc.payments.reduce((sum, p) => Number(sum) + (Number(p.amount) || 0), 0);
+      const totalAmount = Number(this.invoice_doc.grand_total || this.invoice_doc.grand_total);
+      if (totalEntered > totalAmount){
+        this.paymentError = `Total payment amount (${totalEntered}) exceeds invoice amount (${totalAmount})!`;
+        frappe.utils.play_sound("error");
+        frappe.show_alert({
+          message: this.paymentError,
+          indicator: "red",
+        });
+        return;
+      } else{
+        this.paymentErrors[updatedPayment.mode_of_payment] = "";
+        this.invoice_doc.payments = newPayments;
+      }
+    },
+    saveUtrId() {
+      // Save the entered UTR ID to invoice_doc
+      this.invoice_doc.custom_utr = this.utrId;
+
+      // Log the saved UTR ID (for debugging)
+      console.log("Saved UTR ID:", this.invoice_doc.custom_utr);
+
+      // Reset the input field after saving
+      this.utrId = "";
+    },
+
     submit(event, payment_received = false, print = false) {
       if (!this.invoice_doc.is_return && this.total_payments < 0) {
         this.eventBus.emit("show_message", {
@@ -404,7 +455,6 @@ export default {
             color: "error",
           });
           frappe.utils.play_sound("error");
-          console.error("phone payment not requested");
           return;
         }
       }
@@ -473,7 +523,7 @@ export default {
         frappe.utils.play_sound("error");
         return;
       }
-
+      
       if (
         !this.invoice_doc.is_return &&
         this.redeemed_customer_credit >
@@ -486,12 +536,19 @@ export default {
         frappe.utils.play_sound("error");
         return;
       }
+      this.invoice_doc.payments.forEach((payment) => {
+          if (payment.mode_of_payment === "UPI" && payment.amount ) {
+             if(!this.invoice_doc.custom_utr){
+              frappe.throw("UTR ID is compulsary for UPI payments")
+             }
+          }
+      });
       this.is_sucessful_invoice = this.submit_invoice(print);
 
 
     },
     submit_invoice(print) {
-      let totalPayedAmount = 0;
+      let totalPayedAmount = 0
       this.invoice_doc.payments.forEach((payment) => {
         payment.amount = flt(payment.amount);
         totalPayedAmount += payment.amount;
@@ -531,6 +588,8 @@ export default {
             return;
           }
           if (print) {
+            console.log("the sales invoice", vm)
+            console.log("the sales invoice doc", vm.invoice_doc)
             vm.load_print_page();
           }
           vm.customer_credit_dict = [];
@@ -543,7 +602,6 @@ export default {
             title: `Invoice ${r.message.name} is Submited`,
             color: "success",
           });
-          //s
           frappe.utils.play_sound("submit");
           vm.addresses = [];
           vm.eventBus.emit("clear_invoice");
@@ -577,23 +635,38 @@ export default {
         payment.amount = 0;
       });
     },
+    
     load_print_page() {
-      const print_format =
-        this.pos_profile.print_format_for_online ||
-        this.pos_profile.print_format;
-      const letter_head = this.pos_profile.letter_head || 0;
-      const url = frappe.urllib.get_base_url() + "/printview?doctype=Sales%20Invoice&name=" + this.invoice_doc.name + "&trigger_print=1" + "&format=" + print_format + "&no_letterhead=" + letter_head;
-      const printWindow = window.open(url, "Print");
-      printWindow.addEventListener(
-        "load",
-        function () {
-          printWindow.print();
-          setTimeout(() => {
-            printWindow.print();
-          }, 1000);
-        },
-        true
-      );
+        const print_format = this.pos_profile.print_format_for_online || this.pos_profile.print_format;
+        const letter_head = this.pos_profile.letter_head || 0;
+        const url = `${frappe.urllib.get_base_url()}/printview?doctype=Sales%20Invoice&name=${this.invoice_doc.name}&trigger_print=2&format=${print_format}&no_letterhead=${letter_head}`;
+
+        // Create a hidden iframe
+        const iframe = document.createElement("iframe");
+        Object.assign(iframe.style, {
+            visibility: "hidden",
+            position: "absolute",
+            width: "0px",
+            height: "0px"
+        });
+        iframe.src = url;
+        document.body.appendChild(iframe);
+
+        // Auto-print when iframe loads
+        iframe.onload = () => {
+            try {
+                iframe.contentWindow.print();
+            } catch (error) {
+                console.error("Print failed:", error);
+                frappe.show_alert({ message: __('Print failed. Please try again.'), indicator: 'red' });
+            }
+        };
+
+        // Remove iframe after printing
+        iframe.contentWindow?.addEventListener("afterprint", () => document.body.removeChild(iframe));
+
+        // Fallback cleanup if afterprint fails
+        setTimeout(() => document.body.removeChild(iframe), 8000);
     },
     validate_due_date() {
       const today = frappe.datetime.now_date();

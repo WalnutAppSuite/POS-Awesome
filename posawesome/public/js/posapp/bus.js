@@ -2,7 +2,7 @@ import { createApp } from 'vue';
 import mitt from 'mitt';
 
 export const eventBus = mitt();
-
+export const paymentSummary = {};
 export default {
     install: (app, options) => {
         app.config.globalProperties.__ = window.__;

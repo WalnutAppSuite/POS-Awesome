@@ -112,7 +112,9 @@ export default {
       drawer: false,
       mini: true,
       item: 0,
-      items: [{ text: 'POS', icon: 'mdi-network-pos' }],
+      items: [
+        { text: 'POS', icon: 'mdi-network-pos' },
+      ],
       pos_profile: {},
       menu_item: 0,
       snack: false,
@@ -153,6 +155,8 @@ export default {
           },
           fields: ['name', 'customer', 'grand_total'],
           order_by: 'creation desc',
+          limit_page_length: 1000,
+          limit_start: 0,
         },
         callback: (r) => {
           console.log("Sales History Response:", r);
@@ -215,7 +219,6 @@ export default {
     this.$nextTick(() => {
       this.eventBus.on('register_pos_profile', (data) => {
         this.pos_profile = data.pos_profile || { name: '' };
-        console.log("POS Profile Registered:", this.pos_profile);
       });
     });
   }
