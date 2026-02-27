@@ -21,6 +21,17 @@
                 <v-autocomplete :items="pos_profiles" :label="frappe._('POS Profile')" v-model="pos_profile"
                   required></v-autocomplete>
               </v-col>
+              <v-col cols="12" v-if="show_terminal_select">
+                <v-autocomplete
+                  :items="terminals"
+                  item-title="label"
+                  item-value="name"
+                  :label="frappe._('POS Terminal')"
+                  v-model="selected_terminal"
+                  :loading="loading_terminals"
+                  required
+                ></v-autocomplete>
+              </v-col>
               <v-col cols="12">
                 <v-data-table :headers="payments_methods_headers" :items="payments_methods" item-key="mode_of_payment"
                   class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer>
@@ -85,6 +96,10 @@ export default {
       snack: false, // TODO : need to remove
       snackColor: '', // TODO : need to remove
       snackText: '', // TODO : need to remove
+      terminals: [],
+      selected_terminal: null,
+      loading_terminals: false,
+      show_terminal_select: false,
     };
   },
   watch: {
@@ -112,6 +127,7 @@ export default {
           });
         }
       });
+      this.fetch_terminals(val);
     },
   },
   methods: {
@@ -135,8 +151,40 @@ export default {
         },
       });
     },
+    fetch_terminals(pos_profile) {
+      this.terminals = [];
+      this.selected_terminal = null;
+      this.show_terminal_select = false;
+      if (!pos_profile) return;
+
+      const profile_data = this.pos_profiles_data.find(p => p.name === pos_profile);
+      if (!profile_data || !profile_data.posa_enable_pos_terminal) return;
+
+      this.loading_terminals = true;
+      frappe.call({
+        method: 'posawesome.posawesome.api.posapp.get_terminals_for_profile',
+        args: { pos_profile },
+        callback: (r) => {
+          this.loading_terminals = false;
+          if (r.message && r.message.length) {
+            this.terminals = r.message.map(t => ({
+              name: t.name,
+              label: `${t.terminal_id} (${t.provider})`,
+            }));
+            this.show_terminal_select = true;
+            if (this.terminals.length === 1) {
+              this.selected_terminal = this.terminals[0].name;
+            }
+          }
+        },
+      });
+    },
     submit_dialog() {
       if (!this.payments_methods.length || !this.company || !this.pos_profile) {
+        return;
+      }
+      if (this.show_terminal_select && !this.selected_terminal) {
+        frappe.show_alert({ message: __('Please select a POS Terminal'), indicator: 'orange' });
         return;
       }
       this.is_loading = true;
@@ -146,6 +194,7 @@ export default {
           pos_profile: this.pos_profile,
           company: this.company,
           balance_details: this.payments_methods,
+          pos_terminal: this.selected_terminal || '',
         })
         .then((r) => {
           if (r.message) {

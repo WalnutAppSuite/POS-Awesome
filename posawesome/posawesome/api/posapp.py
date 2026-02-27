@@ -39,7 +39,7 @@ def get_opening_dialog_data():
     data["pos_profiles_data"] = frappe.get_list(
         "POS Profile",
         filters={"disabled": 0},
-        fields=["name", "company", "currency"],
+        fields=["name", "company", "currency", "posa_enable_pos_terminal"],
         limit_page_length=0,
         order_by="name",
     )
@@ -69,7 +69,7 @@ def get_opening_dialog_data():
 
 
 @frappe.whitelist()
-def create_opening_voucher(pos_profile, company, balance_details):
+def create_opening_voucher(pos_profile, company, balance_details, pos_terminal=None):
     balance_details = json.loads(balance_details)
 
     new_pos_opening = frappe.get_doc(
@@ -84,11 +84,15 @@ def create_opening_voucher(pos_profile, company, balance_details):
         }
     )
     new_pos_opening.set("balance_details", balance_details)
+    if pos_terminal:
+        new_pos_opening.custom_pos_terminal = pos_terminal
     new_pos_opening.insert(ignore_permissions=True)
 
     data = {}
     data["pos_opening_shift"] = new_pos_opening.as_dict()
     update_opening_shift_data(data, new_pos_opening.pos_profile)
+    if pos_terminal:
+        data["pos_terminal"] = pos_terminal
     return data
 
 
@@ -102,7 +106,7 @@ def check_opening_shift(user):
             "docstatus": 1,
             "status": "Open",
         },
-        fields=["name", "pos_profile"],
+        fields=["name", "pos_profile", "custom_pos_terminal"],
         order_by="period_start_date desc",
     )
     data = ""
@@ -112,6 +116,8 @@ def check_opening_shift(user):
             "POS Opening Shift", open_vouchers[0]["name"]
         )
         update_opening_shift_data(data, open_vouchers[0]["pos_profile"])
+        if open_vouchers[0].get("custom_pos_terminal"):
+            data["pos_terminal"] = open_vouchers[0]["custom_pos_terminal"]
     return data
 
 
@@ -123,6 +129,26 @@ def update_opening_shift_data(data, pos_profile):
     )
     data["stock_settings"] = {}
     data["stock_settings"].update({"allow_negative_stock": allow_negative_stock})
+
+
+@frappe.whitelist()
+def get_terminals_for_profile(pos_profile):
+    """Return enabled POS Terminal records for a given POS Profile."""
+    providers = frappe.get_all(
+        "POS Terminal Provider",
+        filters={"pos_profile": pos_profile, "enabled": 1},
+        pluck="name",
+    )
+    if not providers:
+        return []
+
+    terminals = frappe.get_all(
+        "POS Terminal",
+        filters={"provider": ["in", providers], "enabled": 1},
+        fields=["name", "terminal_id", "merchant_id", "provider"],
+        order_by="terminal_id asc",
+    )
+    return terminals
 
 
 @frappe.whitelist()

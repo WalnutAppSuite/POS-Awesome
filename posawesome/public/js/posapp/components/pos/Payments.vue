@@ -231,6 +231,41 @@
         ></v-text-field>
         <v-btn class="mt-3" color="primary"  @click="saveUtrId">Save UTR ID</v-btn>
         <v-divider></v-divider>
+        <v-row class="px-1 py-2" v-if="pos_profile.posa_enable_pos_terminal && !invoice_doc.is_return">
+          <v-col cols="12">
+            <div class="text-subtitle-2 mb-1">{{ __("Select Payment Type") }}</div>
+          </v-col>
+          <v-col cols="6" class="pa-1">
+            <v-btn block size="large"
+              :color="selected_payment_type === 'Cash' ? 'primary' : 'grey-lighten-1'"
+              :theme="selected_payment_type === 'Cash' ? 'dark' : 'light'"
+              @click="selectCashPayment()">
+              {{ __("Cash") }}
+            </v-btn>
+          </v-col>
+          <v-col cols="6" class="pa-1">
+            <v-btn block size="large"
+              :color="selected_payment_type === 'Terminal' ? 'primary' : 'grey-lighten-1'"
+              :theme="selected_payment_type === 'Terminal' ? 'dark' : 'light'"
+              @click="showTerminalModeDialog()">
+              {{ __("Terminal") }}
+            </v-btn>
+          </v-col>
+          <v-col cols="6" class="pa-1" v-if="selected_payment_type">
+            <v-text-field density="compact" variant="outlined" color="primary"
+              :label="selected_payment_type === 'Cash' ? __('Cash Amount') : __('Terminal Amount')"
+              bg-color="white" hide-details
+              :model-value="formatCurrency(terminal_display_amount)"
+              :prefix="currencySymbol(invoice_doc.currency)" readonly>
+            </v-text-field>
+          </v-col>
+          <v-col cols="6" class="pa-1" v-if="selected_payment_type === 'Terminal' && terminal_transaction_id">
+            <v-chip color="success" variant="flat" class="mt-1">
+              {{ __("Paid") }} - {{ terminal_transaction_id }}
+            </v-chip>
+          </v-col>
+        </v-row>
+        <v-divider></v-divider>
         <v-row class="px-1 py-0" align="start" no-gutters>
           <v-col cols="6" v-if="
             pos_profile.posa_allow_write_off_change &&
@@ -323,6 +358,13 @@
           <v-btn block class="mt-2 pa-1" size="large" color="error" theme="dark" @click="back_to_invoice">{{
             __("Cancel Payment") }}</v-btn>
         </v-col>
+        <v-col cols="12" v-if="pos_profile.posa_enable_pos_terminal && selected_terminal_mode &&
+            ['FAILED', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(invoice_doc.custom_terminal_payment_status)">
+          <v-btn block class="mt-2 pa-1" size="large" color="warning" theme="dark"
+            @click="initiateTerminalPaymentOnPay(selected_terminal_mode)">
+            {{ __("Retry Terminal Payment") }}
+          </v-btn>
+        </v-col>
       </v-row>
     </v-card>
     <div>
@@ -347,6 +389,31 @@
             <v-btn color="primary" theme="dark" @click="request_payment">{{
               __("Request")
               }}</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+    </div>
+    <div>
+      <v-dialog v-model="terminal_mode_dialog" max-width="400px">
+        <v-card>
+          <v-card-title>
+            <span class="text-h5 text-primary">{{ __("Select Payment Mode") }}</span>
+          </v-card-title>
+          <v-card-text class="pa-2">
+            <v-row>
+              <v-col cols="12" v-for="mode in terminal_modes" :key="mode.mode_of_payment" class="pa-1">
+                <v-btn block size="large" color="primary" theme="dark"
+                  @click="onTerminalModeSelected(mode.mode_of_payment)">
+                  {{ mode.mode_of_payment }}
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn color="error" theme="dark" @click="terminal_mode_dialog = false">
+              {{ __("Cancel") }}
+            </v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -392,6 +459,12 @@ export default {
     pos_settings: "",
     customer_info: "",
     mpesa_modes: [],
+    terminal_processing: false,
+    terminal_transaction_id: null,
+    selected_payment_type: null,
+    terminal_mode_dialog: false,
+    selected_terminal_mode: null,
+    pos_terminal: null,
   }),
 
   methods: {
@@ -551,11 +624,17 @@ export default {
       }
       this.invoice_doc.payments.forEach((payment) => {
           if (payment.mode_of_payment === "UPI" && payment.amount ) {
-             if(!this.invoice_doc.custom_utr){
+             // Skip UTR check if terminal payment was successful
+             const isTerminalPayment = this.pos_profile.posa_enable_pos_terminal &&
+                                       this.invoice_doc.custom_terminal_payment_status === "SUCCESS";
+             if(!isTerminalPayment && !this.invoice_doc.custom_utr){
               frappe.throw("UTR ID is compulsary for UPI payments")
              }
           }
       });
+
+      // Terminal payment already handled on PAY click.
+      // Just submit the invoice directly.
       this.is_sucessful_invoice = this.submit_invoice(print);
 
 
@@ -845,9 +924,7 @@ export default {
         this.back_to_invoice();
         return;
       }
-      this.eventBus.emit("freeze", {
-        title: __(`Waiting for payment... `),
-      });
+      frappe.dom.freeze(__("Waiting for payment..."));
       this.invoice_doc.payments.forEach((payment) => {
         payment.amount = flt(payment.amount);
       });
@@ -881,7 +958,7 @@ export default {
               },
             })
             .fail(() => {
-              this.eventBus.emit("unfreeze");
+              frappe.dom.unfreeze();
               this.eventBus.emit("show_message", {
                 title: __(`Payment request failed`),
                 color: "error",
@@ -897,7 +974,7 @@ export default {
                   ])
                   .then(({ message }) => {
                     if (message.status != "Paid") {
-                      this.eventBus.emit("unfreeze");
+                      frappe.dom.unfreeze();
                       this.eventBus.emit("show_message", {
                         title: __(
                           `Payment Request took too long to respond. Please try requesting for payment again`
@@ -905,7 +982,7 @@ export default {
                         color: "error",
                       });
                     } else {
-                      this.eventBus.emit("unfreeze");
+                      frappe.dom.unfreeze();
                       this.eventBus.emit("show_message", {
                         title: __("Payment of {0} received successfully.", [
                           vm.formatCurrency(
@@ -980,6 +1057,280 @@ export default {
       };
       this.clear_all_amounts();
       this.customer_credit_dict.push(advance);
+    },
+
+    // =============================================================================
+    // POS TERMINAL PAYMENT METHODS
+    // =============================================================================
+
+    selectCashPayment() {
+      this.selected_payment_type = 'Cash';
+      this.selected_terminal_mode = null;
+      this.terminal_transaction_id = null;
+
+      const amount = this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
+        this.currency_precision
+      );
+
+      // Find Cash payment row and fill it, clear others
+      this.invoice_doc.payments.forEach(p => {
+        p.amount = ((p.mode_of_payment || '').toLowerCase() === 'cash') ? amount : 0;
+      });
+    },
+
+    showTerminalModeDialog() {
+      if (this.terminal_modes.length === 0) {
+        this.eventBus.emit("show_message", {
+          title: __("No terminal payment modes enabled in POS Profile"),
+          color: "error",
+        });
+        return;
+      }
+      this.terminal_mode_dialog = true;
+    },
+
+    onTerminalModeSelected(modeOfPayment) {
+      this.terminal_mode_dialog = false;
+      this.selected_payment_type = 'Terminal';
+      this.selected_terminal_mode = modeOfPayment;
+
+      // Clear all payment amounts
+      this.invoice_doc.payments.forEach(p => { p.amount = 0; });
+
+      // Trigger POS terminal payment
+      this.initiateTerminalPaymentOnPay(modeOfPayment);
+    },
+
+    async initiateTerminalPaymentOnPay(modeOfPayment) {
+      const amount = this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
+        this.currency_precision
+      );
+      if (amount <= 0) return;
+
+      // Reset previous terminal state for fresh attempt
+      this.terminal_processing = true;
+      this._terminal_cancelled = false;
+      this.terminal_transaction_id = null;
+      this.invoice_doc.custom_terminal_payment_status = "";
+      this.invoice_doc.custom_terminal_transaction_id = "";
+
+      this._showTerminalFreeze(amount);
+
+      try {
+        // Step 1: Send PushTxn to machine (returns quickly with PENDING)
+        const response = await frappe.call({
+          method: "posawesome.posawesome.api.pos_terminal.initiate_payment",
+          args: {
+            invoice_data: JSON.stringify({
+              amount: amount,
+              invoice_name: this.invoice_doc.name,
+              customer_name: this.invoice_doc.customer_name || this.invoice_doc.customer,
+              payment_mode: modeOfPayment,
+              provider: this.pos_terminal,
+            }),
+          },
+          async: true,
+        });
+
+        const result = response.message || {};
+
+        if (result.success) {
+          // Immediate success (unlikely but handle it)
+          this.onTerminalPaymentSuccess(result, modeOfPayment);
+          return;
+        }
+
+        if (result.pending && result.transaction_id) {
+          // Machine accepted → store transaction_id and poll CheckStatus
+          this.terminal_transaction_id = result.transaction_id;
+          const timeoutSeconds = result.timeout_seconds || 120;
+          await this._pollTerminalStatus(result.transaction_id, modeOfPayment, timeoutSeconds);
+        } else {
+          this.onTerminalPaymentFailure(result);
+        }
+      } catch (error) {
+        this.onTerminalPaymentFailure({ message: error.message || "Payment processing error" });
+      } finally {
+        this.terminal_processing = false;
+        frappe.dom.unfreeze();
+        delete window.cur_pos_cancel_terminal;
+      }
+    },
+
+    _showTerminalFreeze(amount) {
+      const freezeMsg = __("Waiting for payment on POS machine...") + "<br>" +
+        __("Amount: {0}", [this.formatCurrency(amount, this.invoice_doc.currency, 0)]) +
+        "<br><br>" +
+        `<button class="btn btn-danger btn-sm" onclick="cur_pos_cancel_terminal()">${__("Cancel Payment")}</button>`;
+      const vm = this;
+      window.cur_pos_cancel_terminal = function() {
+        vm.cancelTerminalPayment();
+      };
+      frappe.dom.freeze(freezeMsg);
+    },
+
+    async _pollTerminalStatus(transactionId, modeOfPayment, timeoutSeconds) {
+      const interval = 5000;
+      const maxAttempts = Math.ceil(timeoutSeconds / (interval / 1000));
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (this._terminal_cancelled) return;
+
+        await new Promise(resolve => setTimeout(resolve, interval));
+
+        if (this._terminal_cancelled) return;
+
+        try {
+          const response = await frappe.call({
+            method: "posawesome.posawesome.api.pos_terminal.check_payment_status",
+            args: {
+              transaction_id: transactionId,
+              provider: this.pos_terminal,
+            },
+            async: true,
+          });
+
+          const result = response.message || {};
+          const status = (result.status || "").toUpperCase();
+          const rc = result.response_code || "";
+          const rd = result.response_desc || "";
+
+          console.log(
+            `[POS Terminal] Poll #${attempt}: ResponseCode=${rc}, ResponseDesc="${rd}", status=${status}`
+          );
+
+          // Terminal states — stop polling, show result
+          if (status === "SUCCESS") {
+            this.onTerminalPaymentSuccess({
+              success: true,
+              transaction_id: result.transaction_id || transactionId,
+              auth_code: result.auth_code || "",
+            }, modeOfPayment);
+            return;
+          }
+
+          if (status === "FAILED") {
+            this.onTerminalPaymentFailure({ message: rd || __("Payment failed"), status: "FAILED" });
+            return;
+          }
+
+          if (status === "CANCELLED") {
+            this.onTerminalPaymentFailure({ message: rd || __("Payment cancelled on terminal"), status: "CANCELLED" });
+            return;
+          }
+
+          if (status === "TIMEOUT") {
+            this.onTerminalPaymentFailure({ message: rd || __("Payment timed out on terminal"), status: "TIMEOUT" });
+            return;
+          }
+
+          if (status === "ERROR") {
+            this.onTerminalPaymentFailure({ message: rd || __("Terminal error"), status: "ERROR" });
+            return;
+          }
+
+          // PENDING (rc=01 "No data found" or rc=06 "Pending") — keep polling silently
+        } catch (error) {
+          console.error(`[POS Terminal] Poll #${attempt} error:`, error);
+        }
+      }
+
+      // Exhausted all attempts — only got PENDING/01 responses, mark as timed out
+      console.log("[POS Terminal] Max poll attempts reached. Marking as TIMEOUT.");
+      this.cancelTerminalPayment();
+      this.onTerminalPaymentFailure({
+        message: __("No response from terminal. Transaction timed out."),
+        status: "TIMEOUT",
+      });
+    },
+
+    onTerminalPaymentSuccess(response, modeOfPayment) {
+      // Stamp terminal info on invoice
+      this.invoice_doc.custom_terminal_transaction_id = response.transaction_id;
+      this.invoice_doc.custom_terminal_payment_status = "SUCCESS";
+      this.invoice_doc.custom_terminal_provider = this.pos_terminal;
+      if (response.auth_code) {
+        this.invoice_doc.custom_terminal_auth_code = response.auth_code;
+      }
+      this.terminal_transaction_id = response.transaction_id;
+
+      const amount = this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
+        this.currency_precision
+      );
+
+      // Fill the selected payment mode with full amount, others 0
+      this.invoice_doc.payments.forEach((payment) => {
+        payment.amount = (payment.mode_of_payment === modeOfPayment) ? amount : 0;
+      });
+
+      // Show success message
+      this.eventBus.emit("show_message", {
+        title: __("Payment Successful!"),
+        subtitle: __("Transaction ID: {0}", [response.transaction_id]),
+        color: "success",
+      });
+      frappe.utils.play_sound("submit");
+
+      // Auto-submit the invoice since terminal payment is confirmed
+      this.$nextTick(() => {
+        this.submit(undefined, false, true);
+      });
+    },
+
+    onTerminalPaymentFailure(response) {
+      const errorMessage = response?.message || __("Payment failed. Please try again.");
+      const status = (response?.status || "FAILED").toUpperCase();
+
+      // Stamp status on invoice
+      this.invoice_doc.custom_terminal_payment_status = status;
+
+      // Show contextual message based on what happened
+      const titles = {
+        "FAILED": __("Payment Failed"),
+        "DECLINED": __("Payment Declined"),
+        "CANCELLED": __("Payment Cancelled"),
+        "TIMEOUT": __("Payment Timed Out"),
+        "ERROR": __("Terminal Error"),
+      };
+
+      this.eventBus.emit("show_message", {
+        title: titles[status] || __("Payment Failed"),
+        subtitle: errorMessage,
+        color: status === "CANCELLED" ? "warning" : "error",
+      });
+      frappe.utils.play_sound("error");
+    },
+
+    async cancelTerminalPayment() {
+      this._terminal_cancelled = true;
+
+      if (this.terminal_transaction_id) {
+        try {
+          await frappe.call({
+            method: "posawesome.posawesome.api.pos_terminal.cancel_payment",
+            args: {
+              transaction_id: this.terminal_transaction_id,
+              provider: this.pos_terminal,
+            },
+          });
+        } catch (error) {
+          console.error("Cancel payment error:", error);
+        }
+      }
+
+      this.invoice_doc.custom_terminal_payment_status = "CANCELLED";
+      this.terminal_transaction_id = null;
+      this.terminal_processing = false;
+      // Keep selected_payment_type and selected_terminal_mode so Retry button shows
+      frappe.dom.unfreeze();
+      delete window.cur_pos_cancel_terminal;
+
+      this.eventBus.emit("show_message", {
+        title: __("Payment cancelled"),
+        color: "warning",
+      });
     },
   },
 
@@ -1056,6 +1407,17 @@ export default {
         return false;
       }
     },
+    terminal_display_amount() {
+      if (!this.invoice_doc || !this.selected_payment_type) return 0;
+      return this.flt(
+        this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
+        this.currency_precision
+      );
+    },
+    terminal_modes() {
+      if (!this.pos_profile || !this.pos_profile.payments) return [];
+      return this.pos_profile.payments.filter(p => p.custom_pos_enabled);
+    },
     request_payment_field() {
       let res = false;
       if (!this.pos_settings || this.pos_settings.invoice_fields.length == 0) {
@@ -1099,9 +1461,15 @@ export default {
         this.loyalty_amount = 0;
         this.get_addresses();
         this.get_sales_person_names();
+
+        // Reset terminal payment state when panel opens
+        this.selected_payment_type = null;
+        this.selected_terminal_mode = null;
+        this.terminal_transaction_id = null;
       });
       this.eventBus.on("register_pos_profile", (data) => {
         this.pos_profile = data.pos_profile;
+        this.pos_terminal = data.pos_terminal || null;
         this.get_mpesa_modes();
       });
       this.eventBus.on("add_the_new_address", (data) => {

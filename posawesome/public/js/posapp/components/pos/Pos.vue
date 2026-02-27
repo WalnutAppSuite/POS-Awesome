@@ -51,6 +51,7 @@ export default {
       dialog: false,
       pos_profile: '',
       pos_opening_shift: '',
+      pos_terminal: '',
       payment: false,
       offers: false,
       coupons: false,
@@ -84,6 +85,7 @@ export default {
           if (r.message) {
             this.pos_profile = r.message.pos_profile;
             this.pos_opening_shift = r.message.pos_opening_shift;
+            this.pos_terminal = r.message.pos_terminal || '';
             this.get_offers(this.pos_profile.name);
             this.eventBus.emit('register_pos_profile', r.message);
             this.eventBus.emit('set_company', r.message.company);
@@ -162,6 +164,7 @@ export default {
         this.pos_profile = data.pos_profile;
         this.get_offers(this.pos_profile.name);
         this.pos_opening_shift = data.pos_opening_shift;
+        this.pos_terminal = data.pos_terminal || '';
         this.eventBus.emit('register_pos_profile', data);
         console.info('LoadPosProfile');
       });
