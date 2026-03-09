@@ -81,7 +81,6 @@
    "reqd": 1
   },
   {
-   "depends_on": "enabled",
    "fieldname": "source_id",
    "fieldtype": "Data",
    "label": "Source ID",
@@ -93,25 +92,20 @@
    "label": "API Endpoints"
   },
   {
-   "depends_on": "enabled",
    "fieldname": "push_txn_url",
    "fieldtype": "Data",
-   "label": "Push Transaction URL",
-   "mandatory_depends_on": "enabled"
+   "label": "Push Transaction URL"
   },
   {
-   "depends_on": "enabled",
    "fieldname": "check_status_url",
    "fieldtype": "Data",
-   "label": "Check Status URL",
-   "mandatory_depends_on": "enabled"
+   "label": "Check Status URL"
   },
   {
    "fieldname": "column_break_urls",
    "fieldtype": "Column Break"
   },
   {
-   "depends_on": "enabled",
    "fieldname": "cancel_txn_url",
    "fieldtype": "Data",
    "label": "Cancel Transaction URL"
@@ -170,7 +164,7 @@
   }
  ],
  "links": [],
- "modified": "2026-02-27 12:25:05.407331",
+ "modified": "2026-02-27 14:58:58.500270",
  "modified_by": "Administrator",
  "module": "POSAwesome",
  "name": "POS Terminal Provider",
