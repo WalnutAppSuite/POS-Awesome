@@ -319,12 +319,43 @@
           <v-btn block size="large" color="success" theme="dark" @click="submit(undefined, false, true)"
             :disabled="vaildatPayment">{{ __("Submit & Print") }}</v-btn>
         </v-col>
+        <v-col cols="12" v-if="pos_profile && pos_profile.posa_enable_online_payment && !invoice_doc.is_return">
+          <v-btn block class="mt-2 pa-1" size="large" color="info" theme="dark" @click="initiateOnlinePayment"
+            :loading="onlinePaymentLoading" :disabled="!invoice_doc.grand_total || invoice_doc.grand_total <= 0">
+            {{ __("Pay Online") }}
+          </v-btn>
+        </v-col>
         <v-col cols="12">
           <v-btn block class="mt-2 pa-1" size="large" color="error" theme="dark" @click="back_to_invoice">{{
             __("Cancel Payment") }}</v-btn>
         </v-col>
       </v-row>
     </v-card>
+    <!-- QR Code Dialog for Online Payment -->
+    <v-dialog v-model="qrDialog" max-width="420" persistent>
+      <v-card class="text-center pa-4">
+        <v-card-title class="text-h5 text-primary">{{ __("Scan to Pay") }}</v-card-title>
+        <v-card-text>
+          <img
+            v-if="qrCodeBase64"
+            :src="'data:image/png;base64,' + qrCodeBase64"
+            alt="Payment QR Code"
+            style="max-width: 300px; width: 100%;"
+          />
+          <div class="mt-3 text-subtitle-1" v-if="invoice_doc">
+            {{ __("Amount") }}: {{ formatCurrency(invoice_doc.rounded_total || invoice_doc.grand_total) }}
+          </div>
+          <div class="mt-1 text-caption text-grey">
+            {{ __("Waiting for payment confirmation...") }}
+          </div>
+          <v-progress-linear indeterminate color="primary" class="mt-3"></v-progress-linear>
+        </v-card-text>
+        <v-card-actions class="justify-center">
+          <v-btn color="error" theme="dark" @click="cancelOnlinePayment">{{ __("Cancel") }}</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <div>
       <v-dialog v-model="phone_dialog" max-width="400px">
         <v-card>
@@ -388,6 +419,9 @@ export default {
     redeem_customer_credit: false,
     customer_credit_dict: [],
     phone_dialog: false,
+    qrDialog: false,
+    qrCodeBase64: null,
+    onlinePaymentLoading: false,
     invoiceType: "Invoice",
     pos_settings: "",
     customer_info: "",
@@ -434,7 +468,43 @@ export default {
     },
     saveUtrId() {
       this.invoice_doc.custom_utr = this.utrId;
+    },
 
+    async initiateOnlinePayment() {
+      if (!this.invoice_doc || !this.invoice_doc.name) {
+        frappe.show_alert({ message: __("No invoice found"), indicator: "red" });
+        return;
+      }
+
+      // Ensure socketio is connected for realtime payment notifications
+      if (frappe.realtime.socket && !frappe.realtime.socket.connected) {
+        frappe.realtime.socket.connect();
+      }
+
+      this.onlinePaymentLoading = true;
+      try {
+        const r = await frappe.call({
+          method: "posawesome.posawesome.api.pos_payment_gateway.initiate_online_payment",
+          args: {
+            invoice_name: this.invoice_doc.name,
+            pos_profile: this.pos_profile.name,
+          },
+        });
+        if (r.message && r.message.qr_code_base64) {
+          this.qrCodeBase64 = r.message.qr_code_base64;
+          this.qrDialog = true;
+        } else {
+          frappe.show_alert({ message: __("Failed to generate payment QR"), indicator: "red" });
+        }
+      } catch (e) {
+        frappe.show_alert({ message: e.message || __("Failed to initiate online payment"), indicator: "red" });
+      }
+      this.onlinePaymentLoading = false;
+    },
+
+    cancelOnlinePayment() {
+      this.qrDialog = false;
+      this.qrCodeBase64 = null;
     },
 
     submit(event, payment_received = false, print = false) {
@@ -617,10 +687,28 @@ export default {
           vm.sales_person = "";
 
           vm.eventBus.emit("set_last_invoice", vm.invoice_doc.name);
-          vm.eventBus.emit("show_message", {
-            title: `Invoice ${r.message.name} is Submited`,
-            color: "success",
-          });
+
+          if (vm._onlinePaymentSubmit) {
+            vm._onlinePaymentSubmit = false;
+            frappe.msgprint({
+              title: __("Payment Successful"),
+              message: __("Invoice {0} is Submitted", [r.message.name]),
+              indicator: "green",
+              primary_action: {
+                label: __("Print Invoice"),
+                action: () => {
+                  vm.load_print_page();
+                  frappe.msg_dialog.hide();
+                },
+              },
+            });
+          } else {
+            frappe.utils.play_sound("submit");
+            vm.eventBus.emit("show_message", {
+              title: `Invoice ${r.message.name} is Submited`,
+              color: "success",
+            });
+          }
           frappe.utils.play_sound("submit");
           vm.addresses = [];
           vm.eventBus.emit("clear_invoice");
@@ -1133,6 +1221,68 @@ export default {
     this.eventBus.on("set_mpesa_payment", (data) => {
       this.set_mpesa_payment(data);
     });
+
+    // Online payment realtime listeners
+    if (frappe.realtime.socket && !frappe.realtime.socket.connected) {
+      frappe.realtime.socket.connect();
+    }
+
+    const registerRealtimeListeners = () => {
+      frappe.realtime.on("pos_payment_success", (data) => {
+        console.log("[POS Payment] Success:", data);
+        if (this.invoice_doc && data.invoice_name === this.invoice_doc.name) {
+          this.qrDialog = false;
+          this.qrCodeBase64 = null;
+
+          const fullAmount = this.flt(
+            this.invoice_doc.rounded_total || this.invoice_doc.grand_total,
+            this.currency_precision
+          );
+
+          const onlinePayment = this.invoice_doc.payments.find(
+            (p) => p.mode_of_payment && p.mode_of_payment.toLowerCase() === "online"
+          );
+          const targetPayment = onlinePayment
+            || this.invoice_doc.payments.find((p) => p.default == 1)
+            || this.invoice_doc.payments[0];
+
+          this.invoice_doc.payments.forEach((p) => { p.amount = 0; });
+          if (targetPayment) {
+            targetPayment.amount = fullAmount;
+          }
+
+          // Sync payment status so frontend doesn't overwrite backend values on submit
+          this.invoice_doc.custom_online_payment_status = "Success";
+          if (data.txnid) {
+            this.invoice_doc.custom_online_payment_txnid = data.txnid;
+          }
+
+          this._onlinePaymentSubmit = true;
+          this.submit_invoice(false);
+        }
+      });
+
+      frappe.realtime.on("pos_payment_failure", (data) => {
+        console.log("[POS Payment] Failure:", data);
+        if (this.invoice_doc && data.invoice_name === this.invoice_doc.name) {
+          this.qrDialog = false;
+          this.qrCodeBase64 = null;
+          frappe.show_alert({ message: __("Payment Failed. Please retry."), indicator: "red" });
+        }
+      });
+    };
+
+    if (frappe.realtime.socket) {
+      registerRealtimeListeners();
+    } else {
+      const checkSocket = setInterval(() => {
+        if (frappe.realtime.socket) {
+          clearInterval(checkSocket);
+          registerRealtimeListeners();
+        }
+      }, 500);
+      setTimeout(() => clearInterval(checkSocket), 30000);
+    }
   },
   created() {
     document.addEventListener("keydown", this.shortPay.bind(this));
@@ -1147,6 +1297,8 @@ export default {
     evntBus.$off("set_customer_info_to_edit");
     evntBus.$off("update_invoice_coupons");
     evntBus.$off("set_mpesa_payment");
+    frappe.realtime.off("pos_payment_success");
+    frappe.realtime.off("pos_payment_failure");
   },
 
   unmounted() {

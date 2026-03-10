@@ -1,0 +1,12 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div style="text-align: center; padding: 40px 20px;">
+	{% if show_message %}
+		<h2 style="color: #dc3545;">&#10008; {{ message }}</h2>
+	{% else %}
+		<h2>Processing...</h2>
+	{% endif %}
+	<p style="margin-top: 20px; color: #666;">You can close this page and retry payment from the POS terminal.</p>
+</div>
+{% endblock %}
