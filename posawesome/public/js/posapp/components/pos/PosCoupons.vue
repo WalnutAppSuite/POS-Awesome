@@ -38,6 +38,7 @@
 </template>
 
 <script>
+import _ from "lodash";
 
 export default {
   data: () => ({
@@ -48,6 +49,7 @@ export default {
     new_coupon: null,
     itemsPerPage: 1000,
     singleExpand: true,
+    expanded: [],
     items_headers: [
       { title: __('Coupon'), value: 'coupon_code', align: 'start' },
       { title: __('Type'), value: 'type', align: 'start' },
@@ -171,10 +173,11 @@ export default {
   watch: {
     posa_coupons: {
       deep: true,
-      handler() {
+      // Old: handler() { this.updateInvoice(); this.updateCounters(); }, // fires on every nested property change with no debounce
+      handler: _.debounce(function () {
         this.updateInvoice();
         this.updateCounters();
-      },
+      }, 300),
     },
   },
 

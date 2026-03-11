@@ -25,7 +25,7 @@ export default {
             return value;
         },
         formatFloat(value, precision) {
-            const format = get_number_format(this.pos_profile.currency);
+            const format = get_number_format(this.pos_profile?.currency);
             value = format_number(value, format, precision || this.float_precision || 2);
             return value;
         },

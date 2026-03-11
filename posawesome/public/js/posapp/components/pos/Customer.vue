@@ -1,6 +1,7 @@
 <template>
   <div>
-    <v-text-field 
+    <!-- removed: @click:prepend-inner="go_back" (go_back was not defined, caused Vue warnings on every render) -->
+    <v-text-field
       density="compact"
       clearable
       variant="outlined"
@@ -12,7 +13,6 @@
       append-inner-icon="mdi-arrow-right"
       @click:append-inner="new_customer"
       @keyup.enter="new_customer"
-      @click:prepend-inner="go_back"
       @input="customer = customer.toUpperCase()"
     ></v-text-field>
 
@@ -112,7 +112,7 @@ export default {
                   }
                 },
                 error: function (err) {
-                  console.error('Error inserting customer:', err);
+                  // console.error('Error inserting customer:', err);
                   frappe.msgprint(__('Failed to create customer.'));
                 }
               });
@@ -138,7 +138,7 @@ export default {
           }
         },
         error: function (err) {
-          console.error('Error fetching student details:', err);
+          // console.error('Error fetching student details:', err);
         }
       });
       }else{

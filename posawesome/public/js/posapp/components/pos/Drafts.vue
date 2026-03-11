@@ -112,6 +112,13 @@ export default {
       this.draftsDialog = true;
       this.dialog_data = data;
     });
+    // Fix: register pos_profile so formatCurrency/formatFloat don't warn on every render
+    this.eventBus.on('register_pos_profile', (data) => {
+      this.pos_profile = data.pos_profile;
+    });
+    this.eventBus.on('payments_register_pos_profile', (data) => {
+      this.pos_profile = data.pos_profile;
+    });
   },
 };
 </script>

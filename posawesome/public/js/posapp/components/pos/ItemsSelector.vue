@@ -1,14 +1,14 @@
 <template>
   <div>
     <v-card class="selection mx-auto bg-grey-lighten-5 mt-3" style="max-height: 75vh; height: 75vh">
-      <v-progress-linear :active="loading" :indeterminate="loading" absolute :location="top"
+      <v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
         color="info"></v-progress-linear>
       <v-row class="items px-2 py-1">
         <v-col class="pb-0 mb-2">
           <v-text-field density="compact" clearable autofocus variant="outlined" color="primary"
             :label="frappe._('Search Items')" hint="Search by item code, serial number, batch no or barcode"
             bg-color="white" hide-details v-model="debounce_search" @keydown.esc="esc_event"
-            @keydown.enter="search_onchange" ref="debounce_search"></v-text-field>
+            @keydown.enter="search_onchange" ref="searchInput"></v-text-field>
         </v-col>
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field density="compact" variant="outlined" color="primary" :label="frappe._('QTY')" bg-color="white"
@@ -124,6 +124,7 @@ export default {
     loading: false,
     items_group: [],
     items: [],
+    debounce_search: null,
     search: "",
     first_search: "",
     itemsPerPage: 1000,
@@ -138,6 +139,13 @@ export default {
   }),
 
   watch: {
+    debounce_search: _.debounce(function (val) {
+      this.first_search = val;
+    }, 300),
+    // Sync search from first_search (moved out of computed to avoid mutation in computed)
+    first_search(val) {
+      this.search = this.get_search(val);
+    },
     filtered_items(new_value, old_value) {
       if (!this.pos_profile.pose_use_limit_search) {
         if (new_value.length != old_value.length) {
@@ -145,9 +153,10 @@ export default {
         }
       }
     },
-    customer() {
+    // Old: customer() { this.get_items(); }, // no debounce, fires API on every keystroke
+    customer: _.debounce(function () {
       this.get_items();
-    },
+    }, 600),
     new_line() {
       this.eventBus.emit("set_new_line", this.new_line);
     },
@@ -162,7 +171,7 @@ export default {
     },
     get_items() {
       if (!this.pos_profile) {
-        console.error("No POS Profile");
+        // console.error("No POS Profile");
         return;
       }
       const vm = this;
@@ -199,7 +208,7 @@ export default {
             vm.items = r.message;
             vm.eventBus.emit("set_all_items", vm.items);
             vm.loading = false;
-            console.info("Items Loaded");
+            // console.info("Items Loaded");
             if (
               vm.pos_profile.posa_local_storage &&
               !vm.pos_profile.pose_use_limit_search
@@ -211,7 +220,7 @@ export default {
                   JSON.stringify(r.message)
                 );
               } catch (e) {
-                console.error(e);
+                // console.error(e);
               }
             }
             if (vm.pos_profile.pose_use_limit_search) {
@@ -223,7 +232,7 @@ export default {
     },
     get_items_groups() {
       if (!this.pos_profile) {
-        console.log("No POS Profile");
+        // console.log("No POS Profile");
         return;
       }
       if (this.pos_profile.item_groups.length > 0) {
@@ -339,7 +348,7 @@ export default {
         this.flags.serial_no = null;
         this.flags.batch_no = null;
         this.qty = 1;
-        this.$refs.debounce_search.focus();
+        this.$refs.searchInput.focus();
       }
     },
     search_onchange() {
@@ -388,7 +397,7 @@ export default {
       this.search = null;
       this.first_search = null;
       this.qty = 1;
-      this.$refs.debounce_search.focus();
+      this.$refs.searchInput.focus();
     },
     update_items_details(items) {
       // set debugger
@@ -470,7 +479,8 @@ export default {
 
   computed: {
   filtered_items() {
-    this.search = this.get_search(this.first_search);
+    // Old: this.search = this.get_search(this.first_search); // commented out: computed should not mutate state
+    const search = this.get_search(this.first_search);
 
     if (!this.pos_profile.pose_use_limit_search) {
       let filtered_list = [];
@@ -485,11 +495,13 @@ export default {
         filtered_group_list = this.items;
       }
 
-      if (!this.search || this.search.length < 3) {
+      // Old: if (!this.search || this.search.length < 3) {
+      if (!search || search.length < 3) {
         filtered_list = filtered_group_list;
       } else {
         filtered_list = filtered_group_list.filter((item) =>
-          item.item_name.toLowerCase().includes(this.search.toLowerCase())
+          // Old: item.item_name.toLowerCase().includes(this.search.toLowerCase())
+          item.item_name.toLowerCase().includes(search.toLowerCase())
         );
       }
 

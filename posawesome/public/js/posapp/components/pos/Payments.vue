@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-card class="selection mx-auto bg-grey-lighten-5 pa-1" style="max-height: 76vh; height: 76vh">
-      <v-progress-linear :active="loading" :indeterminate="loading" absolute :location="top"
+      <v-progress-linear :active="loading" :indeterminate="loading" absolute location="top"
         color="info"></v-progress-linear>
       <div class="overflow-y-auto px-2 pt-2" style="max-height: 75vh">
         <v-row v-if="invoice_doc" class="px-1 py-0">
@@ -426,6 +426,7 @@ export default {
     pos_settings: "",
     customer_info: "",
     mpesa_modes: [],
+    readonly: false,
   }),
 
   methods: {
@@ -667,7 +668,8 @@ export default {
           data: data,
           invoice: this.invoice_doc,
         },
-        async: false,
+        // Old: async: false, // blocks UI thread, causing unresponsiveness
+        async: true,
         callback: function (r) {
           if (!r?.message) {
             vm.eventBus.emit("show_message", {
@@ -677,8 +679,8 @@ export default {
             return;
           }
           if (print) {
-            console.log("the sales invoice", vm)
-            console.log("the sales invoice doc", vm.invoice_doc)
+            // console.log("the sales invoice", vm)
+            // console.log("the sales invoice doc", vm.invoice_doc)
             vm.load_print_page();
           }
           vm.customer_credit_dict = [];
@@ -716,7 +718,7 @@ export default {
           return;
         }
       });
-      console.log(this.is_sucessful_invoice)
+      // console.log(this.is_sucessful_invoice)
     },
     set_full_amount(idx) {
       this.invoice_doc.payments.forEach((payment) => {
@@ -1092,7 +1094,7 @@ export default {
         this.total_payments,
         this.currency_precision
       );
-      this.paid_change = -diff_payment;
+      // Old: this.paid_change = -diff_payment; // moved to watcher to avoid mutation in computed
       return diff_payment;
     },
     credit_change() {
@@ -1306,6 +1308,10 @@ export default {
   },
 
   watch: {
+    // Sync paid_change from diff_payment (moved from computed to avoid mutation in computed)
+    diff_payment(value) {
+      this.paid_change = -value;
+    },
     loyalty_amount(value) {
       if (value > this.available_pioints_amount) {
         this.invoice_doc.loyalty_amount = 0;
@@ -1332,7 +1338,7 @@ export default {
     },
     credit_sales_due_date(value) {
       this.invoice_doc.due_date = frappe.datetime.get_datetime_as_string(value)
-      console.log(this.invoice_doc)
+      // console.log(this.invoice_doc)
     },
     is_write_off_change(value) {
       if (value == 1) {
