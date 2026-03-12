@@ -256,6 +256,9 @@ export default {
   },
   created: function () {
     this.eventBus.on('open_update_customer', (data) => {
+      this.getCustomerGroups();
+      this.getCustomerTerritorys();
+      this.getGenders();
       this.customerDialog = true;
       if (data) {
         this.customer_name = data.customer_name;
@@ -278,9 +281,6 @@ export default {
     this.eventBus.on('payments_register_pos_profile', (data) => {
       this.pos_profile = data.pos_profile;
     });
-    this.getCustomerGroups();
-    this.getCustomerTerritorys();
-    this.getGenders();
     // set default values for customer group and territory from user defaults
     this.group = frappe.defaults.get_user_default('Customer Group');
     this.territory = frappe.defaults.get_user_default('Territory');
