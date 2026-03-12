@@ -66,7 +66,7 @@ doctype_js = {
 # ------------
 
 # before_install = "posawesome.install.before_install"
-# after_install = "posawesome.install.after_install"
+# after_install = "posawesome.posawesome.install.after_install"
 # before_uninstall = "posawesome.uninstall.before_uninstall"
 after_uninstall = "posawesome.uninstall.after_uninstall"
 
@@ -259,6 +259,15 @@ fixtures = [
                     "POS Profile-posa_allow_reconcile_payments",
                     "POS Profile-column_break_uolvm",
                     "POS Profile-posa_allow_mpesa_reconcile_payments",
+                    "POS Profile-posa_pos_terminal_section",
+                    "POS Profile-posa_enable_pos_terminal",
+                    "POS Opening Shift-custom_pos_terminal",
+                    "Sales Invoice-custom_terminal_section",
+                    "Sales Invoice-custom_terminal_transaction_id",
+                    "Sales Invoice-custom_terminal_payment_status",
+                    "Sales Invoice-custom_terminal_provider",
+                    "Sales Invoice-custom_terminal_column_break",
+                    "Sales Invoice-custom_terminal_auth_code",
                 ),
             ]
         ],

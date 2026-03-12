@@ -39,7 +39,7 @@ def get_opening_dialog_data():
     data["pos_profiles_data"] = frappe.get_list(
         "POS Profile",
         filters={"disabled": 0},
-        fields=["name", "company", "currency"],
+        fields=["name", "company", "currency", "posa_enable_pos_terminal"],
         limit_page_length=0,
         order_by="name",
     )
@@ -69,7 +69,7 @@ def get_opening_dialog_data():
 
 
 @frappe.whitelist()
-def create_opening_voucher(pos_profile, company, balance_details):
+def create_opening_voucher(pos_profile, company, balance_details, pos_terminal=None):
     balance_details = json.loads(balance_details)
 
     new_pos_opening = frappe.get_doc(
@@ -84,11 +84,15 @@ def create_opening_voucher(pos_profile, company, balance_details):
         }
     )
     new_pos_opening.set("balance_details", balance_details)
+    if pos_terminal:
+        new_pos_opening.custom_pos_terminal = pos_terminal
     new_pos_opening.insert(ignore_permissions=True)
 
     data = {}
     data["pos_opening_shift"] = new_pos_opening.as_dict()
     update_opening_shift_data(data, new_pos_opening.pos_profile)
+    if pos_terminal:
+        data["pos_terminal"] = pos_terminal
     return data
 
 
@@ -102,7 +106,7 @@ def check_opening_shift(user):
             "docstatus": 1,
             "status": "Open",
         },
-        fields=["name", "pos_profile"],
+        fields=["name", "pos_profile", "custom_pos_terminal"],
         order_by="period_start_date desc",
     )
     data = ""
@@ -112,6 +116,8 @@ def check_opening_shift(user):
             "POS Opening Shift", open_vouchers[0]["name"]
         )
         update_opening_shift_data(data, open_vouchers[0]["pos_profile"])
+        if open_vouchers[0].get("custom_pos_terminal"):
+            data["pos_terminal"] = open_vouchers[0]["custom_pos_terminal"]
     return data
 
 
@@ -123,6 +129,26 @@ def update_opening_shift_data(data, pos_profile):
     )
     data["stock_settings"] = {}
     data["stock_settings"].update({"allow_negative_stock": allow_negative_stock})
+
+
+@frappe.whitelist()
+def get_terminals_for_profile(pos_profile):
+    """Return enabled POS Terminal records for a given POS Profile."""
+    providers = frappe.get_all(
+        "POS Terminal Provider",
+        filters={"pos_profile": pos_profile, "enabled": 1},
+        pluck="name",
+    )
+    if not providers:
+        return []
+
+    terminals = frappe.get_all(
+        "POS Terminal",
+        filters={"provider": ["in", providers], "enabled": 1},
+        fields=["name", "terminal_id", "merchant_id", "provider"],
+        order_by="terminal_id asc",
+    )
+    return terminals
 
 
 @frappe.whitelist()
@@ -242,6 +268,116 @@ def get_items(
                 item_prices.setdefault(d.item_code, {})
                 item_prices[d.item_code][d.get("uom") or "None"] = d
 
+            # --- Bulk pre-fetch: barcodes (1 query instead of N) ---
+            barcode_map = {}
+            barcode_rows = frappe.get_all(
+                "Item Barcode",
+                filters={"parent": ["in", items]},
+                fields=["parent", "barcode", "posa_uom"],
+            )
+            for row in barcode_rows:
+                barcode_map.setdefault(row.parent, []).append(
+                    {"barcode": row.barcode, "posa_uom": row.posa_uom}
+                )
+
+            # --- Bulk pre-fetch: serial numbers (1 query instead of N) ---
+            serial_no_map = {}
+            if search_serial_no:
+                sn_rows = frappe.get_all(
+                    "Serial No",
+                    filters={
+                        "item_code": ["in", items],
+                        "status": "Active",
+                        "warehouse": warehouse,
+                    },
+                    fields=["item_code", "name as serial_no"],
+                )
+                for row in sn_rows:
+                    serial_no_map.setdefault(row.item_code, []).append(
+                        {"serial_no": row.serial_no}
+                    )
+
+            # --- Bulk pre-fetch: stock availability (1 query instead of N) ---
+            stock_map = {}
+            if posa_display_items_in_stock or use_limit_search:
+                stock_rows = frappe.db.sql(
+                    """
+                    SELECT sle.item_code, sle.qty_after_transaction
+                    FROM `tabStock Ledger Entry` sle
+                    INNER JOIN (
+                        SELECT item_code,
+                               MAX(posting_datetime) as max_posting_datetime
+                        FROM `tabStock Ledger Entry`
+                        WHERE item_code IN %(items)s
+                          AND warehouse = %(warehouse)s
+                          AND is_cancelled = 0
+                        GROUP BY item_code
+                    ) latest ON sle.item_code = latest.item_code
+                             AND sle.posting_datetime = latest.max_posting_datetime
+                    WHERE sle.warehouse = %(warehouse)s
+                      AND sle.is_cancelled = 0
+                    """,
+                    {"items": items, "warehouse": warehouse},
+                    as_dict=1,
+                )
+                for row in stock_rows:
+                    stock_map[row.item_code] = flt(row.qty_after_transaction)
+
+            # --- Bulk pre-fetch: variant item attributes (1 query instead of N) ---
+            variant_attr_map = {}
+            if posa_show_template_items:
+                variant_items = [i.item_code for i in items_data if i.variant_of]
+                if variant_items:
+                    va_rows = frappe.get_all(
+                        "Item Variant Attribute",
+                        filters={
+                            "parent": ["in", variant_items],
+                            "parentfield": "attributes",
+                        },
+                        fields=["parent", "attribute", "attribute_value"],
+                    )
+                    for row in va_rows:
+                        variant_attr_map.setdefault(row.parent, []).append(
+                            {"attribute": row.attribute, "attribute_value": row.attribute_value}
+                        )
+
+            # --- Bulk pre-fetch: template item attributes + values (2 queries instead of N*M) ---
+            template_attr_map = {}
+            if posa_show_template_items:
+                template_items = [i.item_code for i in items_data if i.has_variants]
+                if template_items:
+                    attr_rows = frappe.get_all(
+                        "Item Variant Attribute",
+                        filters={"parenttype": "Item", "parent": ["in", template_items]},
+                        fields=["parent", "attribute"],
+                        order_by="parent, idx asc",
+                    )
+                    unique_attrs = list({r.attribute for r in attr_rows})
+                    attr_values_by_name = {}
+                    if unique_attrs:
+                        av_rows = frappe.get_all(
+                            "Item Attribute Value",
+                            filters={
+                                "parenttype": "Item Attribute",
+                                "parent": ["in", unique_attrs],
+                            },
+                            fields=["parent", "attribute_value", "abbr"],
+                            order_by="parent, idx asc",
+                        )
+                        for row in av_rows:
+                            attr_values_by_name.setdefault(row.parent, []).append(
+                                {"attribute_value": row.attribute_value, "abbr": row.abbr}
+                            )
+                    for row in attr_rows:
+                        optional_attributes = get_item_optional_attributes(row.parent)
+                        entry = {
+                            "attribute": row.attribute,
+                            "values": attr_values_by_name.get(row.attribute, []),
+                        }
+                        if optional_attributes and row.attribute in optional_attributes:
+                            entry["optional"] = True
+                        template_attr_map.setdefault(row.parent, []).append(entry)
+
             for item in items_data:
                 item_code = item.item_code
                 item_price = {}
@@ -251,11 +387,7 @@ def get_items(
                         or item_prices.get(item_code).get("None")
                         or {}
                     )
-                item_barcode = frappe.get_all(
-                    "Item Barcode",
-                    filters={"parent": item_code},
-                    fields=["barcode", "posa_uom"],
-                )
+                item_barcode = barcode_map.get(item_code, [])
                 batch_no_data = []
                 if search_batch_no:
                     batch_list = get_batch_qty(warehouse=warehouse, item_code=item_code)
@@ -278,32 +410,10 @@ def get_items(
                                             "manufacturing_date": batch_doc.manufacturing_date,
                                         }
                                     )
-                serial_no_data = []
-                if search_serial_no:
-                    serial_no_data = frappe.get_all(
-                        "Serial No",
-                        filters={
-                            "item_code": item_code,
-                            "status": "Active",
-                            "warehouse": warehouse,
-                        },
-                        fields=["name as serial_no"],
-                    )
-                item_stock_qty = 0
-                if pos_profile.get("posa_display_items_in_stock") or use_limit_search:
-                    item_stock_qty = get_stock_availability(
-                        item_code, pos_profile.get("warehouse")
-                    )
-                attributes = ""
-                if pos_profile.get("posa_show_template_items") and item.has_variants:
-                    attributes = get_item_attributes(item.item_code)
-                item_attributes = ""
-                if pos_profile.get("posa_show_template_items") and item.variant_of:
-                    item_attributes = frappe.get_all(
-                        "Item Variant Attribute",
-                        fields=["attribute", "attribute_value"],
-                        filters={"parent": item.item_code, "parentfield": "attributes"},
-                    )
+                serial_no_data = serial_no_map.get(item_code, [])
+                item_stock_qty = stock_map.get(item_code, 0)
+                attributes = template_attr_map.get(item_code, "")
+                item_attributes = variant_attr_map.get(item_code, "")
                 if posa_display_items_in_stock and (
                     not item_stock_qty or item_stock_qty < 0
                 ):
