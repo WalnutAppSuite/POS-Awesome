@@ -19,7 +19,7 @@
               <v-divider class="p-0 m-0"></v-divider>
             </div>
             <div>
-              <v-row density="default" class="overflow-y-auto" style="max-height: 500px">
+              <v-row density="default" style="max-height: 500px; overflow-y: auto">
                 <v-col v-for="(item, idx) in filterdItems" :key="idx" xl="2" lg="3" md="4" sm="4" cols="6"
                   min-height="50">
                   <v-card hover="hover" @click="add_item(item)">

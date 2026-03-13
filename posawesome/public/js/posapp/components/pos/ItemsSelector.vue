@@ -21,7 +21,7 @@
         </v-col>
         <v-col cols="12" class="pt-0 mt-0">
           <div fluid class="items" v-if="items_view == 'card'">
-            <v-row density="default" class="overflow-y-auto" style="max-height: 67vh">
+            <v-row density="default" style="max-height: 67vh; overflow-y: auto">
               <v-col v-for="(item, idx) in filtered_items" :key="idx" xl="2" lg="3" md="6" sm="6" cols="6"
                 min-height="50">
                 <v-card hover="hover" @click="add_item(item)">
@@ -45,7 +45,7 @@
             </v-row>
           </div>
           <div fluid class="items" v-if="items_view == 'list'">
-            <div class="my-0 py-0 overflow-y-auto" style="max-height: 65vh">
+            <div class="my-0 py-0" style="max-height: 65vh; overflow-y: auto">
               <v-data-table :headers="getItemsHeaders()" :items="filtered_items" item-key="item_code" item-value="item-"
                 class="elevation-1" :items-per-page="itemsPerPage" hide-default-footer @click:row="click_item_row">
                 <template v-slot:item.rate="{ item }">

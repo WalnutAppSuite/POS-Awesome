@@ -4,7 +4,7 @@
       <v-card-title>
         <span class="text-h6 text-primary">{{ __('Offers') }}</span>
       </v-card-title>
-      <div class="my-0 py-0 overflow-y-auto" style="max-height: 75vh" @mouseover="style = 'cursor: pointer'">
+      <div class="my-0 py-0" style="max-height: 75vh; overflow-y: auto" @mouseover="style = 'cursor: pointer'">
         <v-data-table :headers="items_headers" :items="pos_offers" :single-expand="singleExpand"
           v-model:expanded="expanded" show-expand item-key="row_id" class="elevation-1" :items-per-page="itemsPerPage"
           hide-default-footer>

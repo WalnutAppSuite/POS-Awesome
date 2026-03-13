@@ -15,7 +15,7 @@
           </v-col>
         </v-row>
       </v-card-title>
-      <div class="my-0 py-0 overflow-y-auto" style="max-height: 75vh" @mouseover="style = 'cursor: pointer'">
+      <div class="my-0 py-0" style="max-height: 75vh; overflow-y: auto" @mouseover="style = 'cursor: pointer'">
         <v-data-table :headers="items_headers" :items="posa_coupons" :single-expand="singleExpand"
           v-model:expanded="expanded" item-key="coupon" class="elevation-1" :items-per-page="itemsPerPage"
           hide-default-footer>
