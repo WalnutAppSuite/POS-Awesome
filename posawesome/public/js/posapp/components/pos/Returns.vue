@@ -18,6 +18,9 @@
             <v-col cols="12" class="pa-1" v-if="dialog_data">
               <v-data-table :headers="headers" :items="dialog_data" item-key="name" class="elevation-1" show-select
                 v-model="selected" select-strategy="single" return-object>
+                <template v-slot:item.item_names="{ item }">
+                  {{ item.items.map(i => i.item_name).join(', ') }}
+                </template>
                 <template v-slot:item.grand_total="{ item }">
                   {{ currencySymbol(item.currency) }}
                   {{ formatCurrency(item.grand_total) }}</template>
@@ -65,6 +68,12 @@ export default {
         value: 'name',
         align: 'start',
         sortable: true,
+      },
+      {
+        title: __('Items'),
+        value: 'item_names',
+        align: 'start',
+        sortable: false,
       },
       {
         title: __('Amount'),
