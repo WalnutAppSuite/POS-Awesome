@@ -74,7 +74,7 @@
         </v-col>
       </v-row>
 
-      <div class="my-0 py-0 overflow-y-auto" style="max-height: 60vh">
+      <div class="my-0 py-0" style="max-height: 60vh; overflow-y: auto">
         <v-data-table :headers="items_headers" :items="items" v-model:expanded="expanded" show-expand
           item-value="posa_row_id" class="elevation-1" :items-per-page="itemsPerPage" expand-on-click
           hide-default-footer>

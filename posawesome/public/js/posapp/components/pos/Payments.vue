@@ -1459,6 +1459,7 @@ export default {
           });
         }
         this.loyalty_amount = 0;
+        this.utrId = this.invoice_doc.custom_utr || "";
         this.get_addresses();
         this.get_sales_person_names();
 
